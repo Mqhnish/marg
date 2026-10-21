@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import socket
 import time
 import urllib.error
 import urllib.request
@@ -47,7 +48,8 @@ class Turn:
 Transport = Callable[[str, dict, dict], dict]  # (url, headers, body) -> json
 
 
-def http_transport(url: str, headers: dict, body: dict, timeout: float = 180) -> dict:
+def http_transport(url: str, headers: dict, body: dict, timeout: float = 600) -> dict:
+    # BharatCode queues requests when busy: a one-line reply has taken over 100 seconds.
     data = json.dumps(body).encode()
     req = urllib.request.Request(url, data=data, headers=headers, method="POST")
     try:
@@ -60,7 +62,13 @@ def http_transport(url: str, headers: dict, body: dict, timeout: float = 180) ->
         err.status = exc.code  # type: ignore[attr-defined]
         raise err from exc
     except urllib.error.URLError as exc:
-        raise LLMError(f"could not reach {url}: {exc.reason}") from exc
+        err = LLMError(f"could not reach {url}: {exc.reason}")
+        err.retryable = isinstance(exc.reason, (TimeoutError, socket.timeout))  # type: ignore[attr-defined]
+        raise err from exc
+    except (TimeoutError, socket.timeout, ConnectionError) as exc:
+        err = LLMError(f"no response from {url} ({exc.__class__.__name__}: {exc})")
+        err.retryable = True  # type: ignore[attr-defined]
+        raise err from exc
 
 
 class Client:
@@ -101,8 +109,8 @@ class Client:
             try:
                 return self.transport(url, headers, body)
             except LLMError as exc:
-                status = getattr(exc, "status", None)
-                if status in RETRY_STATUSES and attempt < self.max_retries:
+                retry = getattr(exc, "status", None) in RETRY_STATUSES or getattr(exc, "retryable", False)
+                if retry and attempt < self.max_retries:
                     self.sleep(delay)
                     delay = min(delay * 2, 30)
                     continue

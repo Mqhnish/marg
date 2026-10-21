@@ -175,3 +175,11 @@ def test_repeated_cut_offs_stop(sample_repo):
     client = Client(api_key="k", transport=transport)
     ask(client, sample_repo, "q")
     assert len(transport.requests) == 4
+
+
+def test_timeouts_are_retried(sample_repo):
+    slow = LLMError("no response")
+    slow.retryable = True
+    transport = ScriptedTransport([slow, responses_text("ok")])
+    client = Client(api_key="k", transport=transport, sleep=lambda s: None)
+    assert ask(client, sample_repo, "q").markdown.strip() == "ok"

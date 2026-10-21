@@ -67,3 +67,19 @@ def test_http_error_reports_request_id(sample_repo, monkeypatch, capsys):
     assert code == 1
     err = capsys.readouterr().err
     assert "HTTP 401" in err and "req_test" in err
+
+
+def test_read_timeout_becomes_retryable_llm_error(monkeypatch):
+    import socket
+
+    import pytest
+
+    from marg.llm import LLMError, http_transport
+
+    def boom(*args, **kwargs):
+        raise socket.timeout("timed out")
+
+    monkeypatch.setattr("marg.llm.urllib.request.urlopen", boom)
+    with pytest.raises(LLMError) as info:
+        http_transport("http://example.invalid/v1/responses", {}, {})
+    assert info.value.retryable is True

@@ -47,6 +47,7 @@ class RepoTools:
     def __init__(self, root: str | Path):
         self.root = Path(root).resolve()
         self.files_read: dict[str, int] = {}  # path -> line count, for citation checks
+        self.ranges_read: dict[str, list[tuple[int, int]]] = {}  # path -> line ranges actually shown
 
     # ---------- helpers ----------
     def _resolve(self, rel: str) -> Path:
@@ -88,12 +89,22 @@ class RepoTools:
         rel = self._rel(target)
         self.files_read[rel] = len(lines)
         start = max(1, int(start_line or 1))
+        if lines and start > len(lines):
+            raise ToolError(f"'{path}' has only {len(lines)} lines")
         end = int(end_line) if end_line else start + MAX_READ_LINES - 1
         end = min(end, len(lines), start + MAX_READ_LINES - 1)
-        chunk = [f"{n:>5}  {lines[n - 1]}" for n in range(start, end + 1)]
+        # Cut at a whole line so the footer and ranges_read say exactly which lines were shown.
+        chunk, size = [], 0
+        for n in range(start, end + 1):
+            line = f"{n:>5}  {lines[n - 1]}"[:MAX_READ_CHARS]
+            if chunk and size + len(line) > MAX_READ_CHARS:
+                end = n - 1
+                break
+            chunk.append(line)
+            size += len(line) + 1
+        if end >= start:
+            self.ranges_read.setdefault(rel, []).append((start, end))
         body = redact("\n".join(chunk))
-        if len(body) > MAX_READ_CHARS:
-            body = body[:MAX_READ_CHARS] + "\n... [truncated]"
         footer = f"\n[{rel}: lines {start}-{end} of {len(lines)}]"
         if end < len(lines):
             footer += " (call read_file again with start_line to see more)"

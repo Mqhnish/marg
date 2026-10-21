@@ -247,3 +247,10 @@ def test_long_runs_resend_shortened_history(sample_repo, monkeypatch):
     outputs = [i["output"] for i in last["input"] if i.get("type") == "function_call_output"]
     assert outputs[0].startswith("[output omitted") and "[app.py: lines 1-8 of 8]" in outputs[0]
     assert "from flask import Flask" in outputs[-1]
+
+
+def test_citations_into_lines_never_shown_are_not_verified(sample_repo):
+    md = "See `app.py:2`, `app.py:5`, `app.py:2-5` and `app.py`."
+    report = check_citations(md, sample_repo, {"app.py": 8}, {"app.py": [(1, 3)]})
+    assert report.valid == ["app.py:2", "app.py"]
+    assert report.unread == ["app.py:5", "app.py:2-5"]

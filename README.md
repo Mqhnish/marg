@@ -16,7 +16,7 @@ marg guide path/to/repo                     # writes path/to/repo/ONBOARDING.md
 
 Joining a new codebase usually means a week of clicking through files and asking "where does X happen?". READMEs explain how to install, rarely how the code fits together. LLM chat helps, but answers about code you haven't read are hard to trust.
 
-Marg makes the model do the reading. It gets read-only tools, a tool budget, and a strict output format, and it has to cite what it read. Citations that point at files it never opened, or at line numbers that don't exist, are flagged in the guide footer.
+Marg makes the model do the reading. It gets read-only tools, a tool budget, and a strict output format, and it has to cite what it read. Citations that point at lines it was never shown, or at line numbers that don't exist, are flagged in the guide footer.
 
 ## Commands
 
@@ -53,7 +53,7 @@ flowchart LR
 1. **Repo map** (`marg/repomap.py`). A local pass collects the file tree, line counts, languages, manifests (`package.json`, `pyproject.toml`, `go.mod`, `Dockerfile`...), likely entry points and the README. It respects `.gitignore` and skips build output, binaries and secret files. This saves the model a dozen tool calls.
 2. **Agent loop** (`marg/agent.py`). The model gets the map plus three read-only tools and explores until it has enough, then writes the guide. When the budget runs out it is told to stop and write. If the answer is cut off by the output limit, Marg asks it to continue.
 3. **BharatCode client** (`marg/llm.py`). It uses the Responses API with function tools by default (`--api chat` for Chat Completions). BharatCode's API is stateless, so Marg replays the history each step with `store: false`. Requests that come back `503` (model busy) or `429` are retried with backoff. The output limit includes reasoning, so a turn that gets cut off is retried with double the budget (up to 32,000 tokens), and tool calls from a cut-off turn are never run.
-4. **Citation checker** (`marg/verify.py`). Every `` `path:line` `` in the output is checked: does the file exist, is the line in range, did the agent actually read it? The result goes in the guide footer.
+4. **Citation checker** (`marg/verify.py`). Every `` `path:line` `` in the output is checked: does the file exist, is the line in range, and was the agent actually shown those lines? The result goes in the guide footer.
 
 ## Safety
 

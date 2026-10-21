@@ -129,7 +129,7 @@ def run_agent(
         break
 
     markdown = "".join(answer_parts).strip() + "\n"
-    report = check_citations(markdown, root, tools.files_read)
+    report = check_citations(markdown, root, tools.files_read, tools.ranges_read)
     if footer:
         markdown += render_footer(report, steps, client.model)
     return AgentResult(markdown, steps, tool_calls, tools.files_read, report, usage)

@@ -76,3 +76,14 @@ def test_bad_argument_values_and_read_errors_return_errors(sample_repo, monkeypa
 
     monkeypatch.setattr("pathlib.Path.read_text", unreadable)
     assert "permission denied" in tools.call("read_file", {"path": "app.py"})
+
+
+def test_read_file_cuts_at_a_whole_line_and_records_what_was_shown(tmp_path):
+    (tmp_path / "big.py").write_text("".join(f"x = '{'y' * 200}'\n" for _ in range(300)))
+    tools = RepoTools(tmp_path)
+    out = tools.read_file("big.py")
+    (start, end), = tools.ranges_read["big.py"]
+    assert start == 1 and 50 < end < 300
+    assert f"[big.py: lines 1-{end} of 300] (call read_file again" in out
+    assert out.count("\n") == end  # end lines of code plus the footer line
+    assert "has only 300 lines" in tools.call("read_file", {"path": "big.py", "start_line": 999})

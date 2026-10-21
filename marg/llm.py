@@ -16,6 +16,7 @@ import os
 import socket
 import ssl
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -25,6 +26,9 @@ from typing import Callable
 DEFAULT_BASE_URL = "https://bharatcode.ai/api/model/v1"
 DEFAULT_MODEL = "qwen-3.8-27b"
 RETRY_STATUSES = {429, 500, 502, 503, 504}
+# Socket timeouts only fire when no bytes arrive, so one request held open by the server
+# froze a real run for 73 minutes. This is a hard wall-clock limit per request.
+REQUEST_DEADLINE = 900
 MAX_OUTPUT_TOKENS = 32_000  # BharatCode's documented ceiling, reasoning included
 
 
@@ -60,7 +64,30 @@ def ssl_context() -> ssl.SSLContext:
     return ctx
 
 
-def http_transport(url: str, headers: dict, body: dict, timeout: float = 600) -> dict:
+def http_transport(url: str, headers: dict, body: dict, deadline: float | None = None) -> dict:
+    """POST with a hard deadline. A request still running at the deadline is abandoned and retried."""
+    deadline = REQUEST_DEADLINE if deadline is None else deadline
+    outcome: dict = {}
+
+    def run() -> None:
+        try:
+            outcome["data"] = _post_json(url, headers, body)
+        except BaseException as exc:  # handed to the caller's thread below
+            outcome["error"] = exc
+
+    worker = threading.Thread(target=run, daemon=True)
+    worker.start()
+    worker.join(deadline)
+    if worker.is_alive():
+        err = LLMError(f"no complete response from {url} after {deadline:.0f} seconds")
+        err.retryable = True  # type: ignore[attr-defined]
+        raise err
+    if "error" in outcome:
+        raise outcome["error"]
+    return outcome["data"]
+
+
+def _post_json(url: str, headers: dict, body: dict, timeout: float = 600) -> dict:
     # BharatCode queues requests when busy: a one-line reply has taken over 100 seconds.
     data = json.dumps(body).encode()
     req = urllib.request.Request(url, data=data, headers=headers, method="POST")

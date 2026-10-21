@@ -104,3 +104,37 @@ def test_non_json_body_becomes_retryable_llm_error(monkeypatch):
     with pytest.raises(LLMError, match="not JSON") as info:
         http_transport("http://example.invalid/v1/responses", {}, {})
     assert info.value.retryable is True
+
+
+def test_request_past_the_deadline_is_abandoned_and_retryable(monkeypatch):
+    import time
+
+    import pytest
+
+    from marg.llm import LLMError, http_transport
+
+    monkeypatch.setattr("marg.llm._post_json", lambda *a: time.sleep(5))
+    started = time.monotonic()
+    with pytest.raises(LLMError, match="no complete response") as info:
+        http_transport("http://example.invalid/v1/responses", {}, {}, deadline=0.2)
+    assert time.monotonic() - started < 2
+    assert info.value.retryable is True
+
+
+def test_deadline_wrapper_passes_results_and_errors_through(monkeypatch):
+    import pytest
+
+    from marg.llm import LLMError, http_transport
+
+    monkeypatch.setattr("marg.llm._post_json", lambda *a: {"ok": True})
+    assert http_transport("http://x/v1/responses", {}, {}) == {"ok": True}
+
+    def unauthorised(*a):
+        err = LLMError("HTTP 401")
+        err.status = 401
+        raise err
+
+    monkeypatch.setattr("marg.llm._post_json", unauthorised)
+    with pytest.raises(LLMError) as info:
+        http_transport("http://x/v1/responses", {}, {})
+    assert info.value.status == 401

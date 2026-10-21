@@ -217,13 +217,16 @@ class Client:
             done.set()
 
     # ---------- public ----------
-    def step(self, system: str, history: list[dict], tools: list[dict] | None, max_output_tokens: int = 8000) -> Turn:
+    def step(self, system: str, history: list[dict], tools: list[dict] | None, max_output_tokens: int = 8000,
+             reasoning: str | None = None) -> Turn:
+        """One model turn. reasoning="none" skips hidden reasoning, which otherwise counts against
+        max_output_tokens: on short tasks it used the whole budget and returned no text."""
         if self.api_style == "responses":
-            return self._step_responses(system, history, tools, max_output_tokens)
-        return self._step_chat(system, history, tools, max_output_tokens)
+            return self._step_responses(system, history, tools, max_output_tokens, reasoning)
+        return self._step_chat(system, history, tools, max_output_tokens, reasoning)
 
     # ---------- Responses API ----------
-    def _step_responses(self, system, history, tools, max_output_tokens) -> Turn:
+    def _step_responses(self, system, history, tools, max_output_tokens, reasoning=None) -> Turn:
         body = {
             "model": self.model,
             "input": [{"role": "system", "content": system}, *history],
@@ -231,6 +234,8 @@ class Client:
             "stream": True,
             "max_output_tokens": max_output_tokens,
         }
+        if reasoning:
+            body["reasoning"] = {"effort": reasoning}
         if tools:
             body["tools"] = [{"type": "function", **t} for t in tools]
         data = self._post("/responses", body)
@@ -256,12 +261,14 @@ class Client:
         return [{"type": "function_call_output", "call_id": cid, "output": out} for cid, out in results]
 
     # ---------- Chat Completions ----------
-    def _step_chat(self, system, history, tools, max_output_tokens) -> Turn:
+    def _step_chat(self, system, history, tools, max_output_tokens, reasoning=None) -> Turn:
         body = {
             "model": self.model,
             "messages": [{"role": "system", "content": system}, *history],
             "max_tokens": max_output_tokens,
         }
+        if reasoning:
+            body["reasoning_effort"] = reasoning
         if tools:
             body["tools"] = [{"type": "function", "function": t} for t in tools]
         data = self._post("/chat/completions", body)

@@ -333,22 +333,24 @@ TAMIL_DRAFT = "# வழிகாட்டி (Onboarding guide): demo\nஎன்
 
 
 def test_wrong_script_words_are_repaired_and_reported(sample_repo):
-    fixes = json.dumps({"budget用完": "budget முடிந்தால்", "repo-வ을": "repo-வை"}, ensure_ascii=False)
+    fixes = json.dumps({"1": "budget முடிந்தால்", "2": "repo-வை"}, ensure_ascii=False)
     transport = ScriptedTransport([responses_call("c1", "read_file", {"path": "app.py"}),
                                    responses_text(TAMIL_DRAFT), responses_text("```json\n" + fixes + "\n```")])
     result = write_guide(Client(api_key="k", transport=transport), sample_repo, lang="ta")
     _, repair = transport.requests[-1]
     assert "wrong script" in repair["input"][0]["content"] and "tools" not in repair
-    assert '"budget用完" in:' in repair["input"][1]["content"] and "repo-வ을" in repair["input"][1]["content"]
-    assert repair["max_output_tokens"] == 4000
+    assert '1. "budget用完" in:' in repair["input"][1]["content"] and '2. "repo-வ을" in:' in repair["input"][1]["content"]
+    assert repair["max_output_tokens"] == 2000 and repair["reasoning"] == {"effort": "none"}
+    _, guide_turn = transport.requests[0]
+    assert "reasoning" not in guide_turn  # the guide itself keeps the model's reasoning
     assert "budget முடிந்தால் ஆனால் repo-வை பார்" in result.markdown
     assert "Script check: 2 word(s) in the wrong script, 2 repaired." in result.markdown
     assert result.citations.valid == ["app.py:4-5"]
 
 
 def test_unusable_repairs_are_ignored(sample_repo):
-    # one fix still has a wrong-script letter, one is for a word that was never flagged
-    fixes = json.dumps({"budget用完": "budget用", "app": "செயலி", "repo-வ을": "repo-வை"}, ensure_ascii=False)
+    # one fix still has a wrong-script letter, one is for a number that wasn't in the list
+    fixes = json.dumps({"1": "budget用", "2": "repo-வை", "9": "செயலி", "x": "செயலி"}, ensure_ascii=False)
     transport = ScriptedTransport([responses_text(TAMIL_DRAFT), responses_text(fixes)])
     result = write_guide(Client(api_key="k", transport=transport), sample_repo, lang="ta")
     assert "budget用完" in result.markdown and "repo-வை" in result.markdown
@@ -372,3 +374,11 @@ def test_clean_drafts_and_english_need_no_repair_request(sample_repo):
     english = ScriptedTransport([responses_text(GUIDE)])
     assert "Script check" not in write_guide(Client(api_key="k", transport=english), sample_repo).markdown
     assert len(english.requests) == 1
+
+
+def test_chat_style_sends_reasoning_effort(sample_repo):
+    transport = ScriptedTransport([{"choices": [{"finish_reason": "stop", "message": {"role": "assistant", "content": "ok"}}]}])
+    Client(api_key="k", api_style="chat", transport=transport).step("s", [{"role": "user", "content": "q"}], None, 100,
+                                                                     reasoning="none")
+    _, body = transport.requests[0]
+    assert body["reasoning_effort"] == "none" and "stream" not in body

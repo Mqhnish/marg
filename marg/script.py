@@ -27,11 +27,11 @@ CODE = re.compile(r"```.*?```|`[^`\n]*`", re.S)
 EDGE_PUNCTUATION = ".,;:!?()[]{}\"'*_|<>"
 
 REPAIR_SYSTEM = """You fix language slips in a technical document written in {english} ({native}).
-You get words that contain letters from the wrong script, each with the sentence it appears in.
+You get a numbered list of words that contain letters from the wrong script, each with the sentence it appears in.
 For each word, give it as it should be written in {english}, or as the English technical term developers use.
 Keep any attached punctuation and any Latin or {english} letters that were already right.
-Reply with JSON only: an object mapping each word exactly as given to its replacement."""
-REPAIR_OUTPUT_TOKENS = 4000
+Reply with JSON only: an object mapping each number to its replacement, like {{"1": "...", "2": "..."}}."""
+REPAIR_OUTPUT_TOKENS = 2000
 
 @dataclass
 class ScriptCheck:
@@ -112,20 +112,25 @@ def check_and_repair(client: Client, markdown: str, lang: str, log=lambda _m: No
     log(f"  {len(check.found)} word(s) in the wrong script, asking the model to fix them")
     english, native = LANGUAGES[lang]
     prose = CODE.sub(" ", markdown)
-    listing = "\n".join(f"- {json.dumps(word, ensure_ascii=False)} in: {_in_context(prose, word)}"
-                        for word in check.found)
+    # Numbered, because when the model echoed the words back it retyped the hard ones wrongly.
+    listing = "\n".join(f"{n}. {json.dumps(word, ensure_ascii=False)} in: {_in_context(prose, word)}"
+                        for n, word in enumerate(check.found, 1))
     request = [{"role": "user", "content": "Words in the wrong script, with where they appear:\n" + listing}]
     try:
-        turn = client.step(REPAIR_SYSTEM.format(english=english, native=native), request, None, REPAIR_OUTPUT_TOKENS)
+        turn = client.step(REPAIR_SYSTEM.format(english=english, native=native), request, None, REPAIR_OUTPUT_TOKENS,
+                           reasoning="none")  # a lookup, not a puzzle: with reasoning on it never got to the answer
     except LLMError as exc:
         log(f"  script repair failed, keeping the draft: {exc}")
         return markdown, check
     check.usage = turn.usage
-    fixes = {
-        wrong: right for wrong, right in _parse_map(turn.text).items()
-        if wrong in check.found and isinstance(right, str) and right.strip()
-        and not foreign_words(right, lang) and len(right) <= 3 * len(wrong) + 20
-    }
+    fixes = {}
+    for number, right in _parse_map(turn.text).items():
+        index = int(number) - 1 if str(number).strip().isdigit() else -1
+        if not 0 <= index < len(check.found) or not isinstance(right, str) or not right.strip():
+            continue
+        wrong = check.found[index]
+        if not foreign_words(right, lang) and len(right) <= 3 * len(wrong) + 20:
+            fixes[wrong] = right
     if not fixes:
         log("  script repair returned no usable fixes, keeping the draft")
         return markdown, check

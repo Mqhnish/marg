@@ -10,6 +10,7 @@ from typing import Callable
 
 from marg import prompts
 from marg.llm import MAX_OUTPUT_TOKENS, Client, LLMError
+from marg.mermaid import fix_mermaid
 from marg.repomap import build_repo_map, render_summary
 from marg.tools import TOOL_SPECS, RepoTools
 from marg.verify import CitationReport, check_citations, render_footer
@@ -136,6 +137,9 @@ def run_agent(
         title = re.search(r"^# ", markdown, re.M)
         if title:
             markdown = markdown[title.start():]
+    markdown, repairs = fix_mermaid(markdown)
+    if repairs:
+        log(f"  repaired {repairs} Mermaid label(s) so the diagram renders")
     report = check_citations(markdown, root, tools.files_read, tools.ranges_read)
     if footer:
         markdown += render_footer(report, steps, client.model)

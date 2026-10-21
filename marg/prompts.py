@@ -16,7 +16,7 @@ What the project does, who it is for, and the main technology choices.
 ## Run it locally
 The real commands, taken from the manifests, scripts, Makefile or README. If you could not confirm a step, say so.
 ## Architecture
-A Mermaid `flowchart` of the main components and how data or requests flow between them, followed by 3 to 6 short bullets explaining it.
+A Mermaid `flowchart` of the main components and how data or requests flow between them, followed by 3 to 6 short bullets explaining it. Put any label containing parentheses, brackets or quotes in double quotes, like `A -->|"next()"| B`, and use `<br/>` for line breaks, never `\n`.
 ## Where things live
 A table: | Path | What it is for |. Cover the directories and files a newcomer will touch first.
 ## Walkthrough of one real flow

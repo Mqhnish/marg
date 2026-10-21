@@ -321,3 +321,9 @@ def test_retries_and_long_waits_are_logged(sample_repo, monkeypatch):
     assert ask(client, sample_repo, "q").markdown.strip() == "ok"
     assert "  HTTP 503: model busy; retrying in 2s (1/6)" in logs
     assert any(line.startswith("  still waiting for the model") for line in logs)
+
+
+def test_guides_are_saved_with_repaired_diagrams(sample_repo):
+    transport = ScriptedTransport([responses_text("# Onboarding guide: demo\n```mermaid\nflowchart LR\n  A -->|next()| B\n```\n")])
+    result = write_guide(Client(api_key="k", transport=transport), sample_repo)
+    assert 'A -->|"next()"| B' in result.markdown

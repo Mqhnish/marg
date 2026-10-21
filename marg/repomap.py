@@ -121,6 +121,7 @@ class FileInfo:
     path: str
     lines: int
     language: str | None
+    binary: bool = False  # images, fonts, archives: listed so the model knows they exist, never read
 
 
 @dataclass
@@ -192,6 +193,7 @@ def build_repo_map(root: str | Path) -> RepoMap:
             continue
         ext = abspath.suffix.lower()
         if ext in BINARY_EXTS:
+            repo.files.append(FileInfo(rel, 0, None, binary=True))
             continue
         repo.files.append(FileInfo(rel, count_lines(abspath), LANGUAGES.get(ext)))
         if name in MANIFESTS:
@@ -240,7 +242,8 @@ def render_tree(repo: RepoMap, max_entries: int = 250, max_per_dir: int = 25) ->
         if directory:
             lines.append("  " * (depth - 1) + f"{directory.split('/')[-1]}/  ({directory})")
         for f in files[:max_per_dir]:
-            lines.append("  " * depth + f"{f.path.split('/')[-1]}  [{f.lines} lines]")
+            size = "binary" if f.binary else f"{f.lines} lines"
+            lines.append("  " * depth + f"{f.path.split('/')[-1]}  [{size}]")
             shown += 1
         if len(files) > max_per_dir:
             lines.append("  " * depth + f"... {len(files) - max_per_dir} more files")
@@ -248,11 +251,18 @@ def render_tree(repo: RepoMap, max_entries: int = 250, max_per_dir: int = 25) ->
     return "\n".join(lines)
 
 
+def _binary_note(repo: RepoMap) -> str:
+    count = sum(f.binary for f in repo.files)
+    if not count:
+        return ""
+    return f", plus {count} binary or asset file{'s' if count != 1 else ''}"
+
+
 def render_summary(repo: RepoMap) -> str:
     langs = ", ".join(f"{name} ({lines} lines)" for name, lines in repo.languages[:6]) or "unknown"
     parts = [
         f"Repository: {repo.root.name}",
-        f"Files: {len(repo.files)} text files, {repo.total_lines} lines",
+        f"Files: {sum(not f.binary for f in repo.files)} text files, {repo.total_lines} lines{_binary_note(repo)}",
         f"Languages: {langs}",
         f"Manifests: {', '.join(repo.manifests) or 'none found'}",
         f"Likely entry points: {render_entry_points(repo)}",

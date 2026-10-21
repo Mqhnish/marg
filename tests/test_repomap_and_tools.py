@@ -8,7 +8,8 @@ def test_repo_map_skips_ignored_binary_and_secret_files(sample_repo):
     assert {"README.md", "app.py", "routes.py", "requirements.txt"} <= paths
     assert not any(p.startswith(("logs/", "node_modules/")) for p in paths)
     assert "scratch.tmp" not in paths
-    assert "logo.png" not in paths
+    assert "logo.png" in paths  # listed so the model knows it exists, but marked binary
+    assert [f.path for f in repo.files if f.binary] == ["logo.png"]
     assert ".env" not in paths
     assert repo.skipped_secrets == 1
     assert "requirements.txt" in repo.manifests
@@ -118,3 +119,13 @@ def test_own_entry_points_come_first_and_demo_ones_are_counted(tmp_path):
     assert repo.entry_points[:2] == ["index.js", "src/server.js"]
     line = next(l for l in render_summary(repo).splitlines() if l.startswith("Likely entry points"))
     assert line == "Likely entry points: index.js, src/server.js (and 3 more, mostly in example, test or docs folders)"
+
+
+def test_binary_and_asset_files_are_listed_but_not_counted(sample_repo):
+    (sample_repo / "docs").mkdir()
+    (sample_repo / "docs" / "diagram.svg").write_text("<svg/>\n")
+    text = render_summary(build_repo_map(sample_repo))
+    assert "diagram.svg  [binary]" in text and "logo.png  [binary]" in text
+    assert "plus 2 binary or asset files" in text
+    assert "Files: 5 text files" in text
+    assert "is a binary file" in RepoTools(sample_repo).call("read_file", {"path": "docs/diagram.svg"})

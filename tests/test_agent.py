@@ -136,3 +136,42 @@ def test_citation_checker_flags_fake_and_out_of_range(sample_repo):
     assert report.bad_lines == ["app.py:99"]
     assert report.missing == ["nope/ghost.py:1"]
     assert report.unread == ["routes.py"]
+
+
+def test_cut_off_tool_call_is_never_run_and_budget_grows(sample_repo):
+    cut_off = responses_call("half", "read_file", {"path": "app.py"})
+    cut_off["status"] = "incomplete"
+    transport = ScriptedTransport([
+        cut_off,
+        responses_call("c1", "read_file", {"path": "routes.py"}),
+        responses_text(GUIDE),
+    ])
+    client = Client(api_key="k", transport=transport)
+    result = write_guide(client, sample_repo, max_steps=10)
+
+    assert result.tool_calls == 1
+    assert set(result.files_read) == {"routes.py"}
+    assert [body["max_output_tokens"] for _, body in transport.requests] == [16000, 32000, 32000]
+    _, last = transport.requests[-1]
+    assert "half" not in json.dumps(last["input"])
+
+
+def test_chat_cut_off_tool_call_is_never_run(sample_repo):
+    transport = ScriptedTransport([
+        {"choices": [{"finish_reason": "length", "message": {"role": "assistant", "content": None, "tool_calls": [
+            {"id": "t0", "type": "function", "function": {"name": "search", "arguments": "{\"pattern\": \"reg"}}
+        ]}}]},
+        {"choices": [{"finish_reason": "stop", "message": {"role": "assistant", "content": "No idea."}}]},
+    ])
+    client = Client(api_key="k", api_style="chat", transport=transport)
+    result = ask(client, sample_repo, "q")
+    assert result.tool_calls == 0
+    assert [body["max_tokens"] for _, body in transport.requests] == [16000, 32000]
+    assert result.markdown.strip() == "No idea."
+
+
+def test_repeated_cut_offs_stop(sample_repo):
+    transport = ScriptedTransport([responses_text("", status="incomplete")] * 4)
+    client = Client(api_key="k", transport=transport)
+    ask(client, sample_repo, "q")
+    assert len(transport.requests) == 4

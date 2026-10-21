@@ -48,7 +48,7 @@ flowchart LR
 
 1. **Repo map** (`marg/repomap.py`). A local pass collects the file tree, line counts, languages, manifests (`package.json`, `pyproject.toml`, `go.mod`, `Dockerfile`...), likely entry points and the README. It respects `.gitignore` and skips build output, binaries and secret files. This saves the model a dozen tool calls.
 2. **Agent loop** (`marg/agent.py`). The model gets the map plus three read-only tools and explores until it has enough, then writes the guide. When the budget runs out it is told to stop and write. If the answer is cut off by the output limit, Marg asks it to continue.
-3. **BharatCode client** (`marg/llm.py`). It uses the Responses API with function tools by default (`--api chat` for Chat Completions). BharatCode's API is stateless, so Marg replays the history each step with `store: false`. Requests that come back `503` (model busy) or `429` are retried with backoff.
+3. **BharatCode client** (`marg/llm.py`). It uses the Responses API with function tools by default (`--api chat` for Chat Completions). BharatCode's API is stateless, so Marg replays the history each step with `store: false`. Requests that come back `503` (model busy) or `429` are retried with backoff. The output limit includes reasoning, so a turn that gets cut off is retried with double the budget (up to 32,000 tokens), and tool calls from a cut-off turn are never run.
 4. **Citation checker** (`marg/verify.py`). Every `` `path:line` `` in the output is checked: does the file exist, is the line in range, did the agent actually read it? The result goes in the guide footer.
 
 ## Safety
@@ -71,7 +71,7 @@ pip install -e ".[dev]"
 pytest -q
 ```
 
-The tests cover the repo map, sandboxing and redaction, citation checking, both API styles, stateless history replay, retries, budget exhaustion and truncated output. They include an end-to-end run of the real CLI over HTTP against a local fake of the BharatCode API, so no key or network is needed.
+The tests cover the repo map, sandboxing and redaction, citation checking, both API styles, stateless history replay, retries, budget exhaustion, truncated output and cut-off tool calls. They include an end-to-end run of the real CLI over HTTP against a local fake of the BharatCode API, so no key or network is needed.
 
 ## Built for
 

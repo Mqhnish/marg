@@ -21,6 +21,7 @@ from typing import Callable
 DEFAULT_BASE_URL = "https://bharatcode.ai/api/model/v1"
 DEFAULT_MODEL = "qwen-3.8-27b"
 RETRY_STATUSES = {429, 500, 502, 503, 504}
+MAX_OUTPUT_TOKENS = 32_000  # BharatCode's documented ceiling, reasoning included
 
 
 class LLMError(Exception):

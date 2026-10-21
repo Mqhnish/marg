@@ -7,12 +7,15 @@ from pathlib import Path
 from typing import Callable
 
 from marg import prompts
-from marg.llm import Client
+from marg.llm import MAX_OUTPUT_TOKENS, Client
 from marg.repomap import build_repo_map, render_summary
 from marg.tools import TOOL_SPECS, RepoTools
 from marg.verify import CitationReport, check_citations, render_footer
 
 Logger = Callable[[str], None]
+
+START_OUTPUT_TOKENS = 16_000
+MAX_CUTOFFS = 3
 
 
 @dataclass
@@ -39,6 +42,7 @@ def run_agent(
     max_steps: int = 30,
     log: Logger = lambda _msg: None,
     footer: bool = True,
+    max_output_tokens: int = START_OUTPUT_TOKENS,
 ) -> AgentResult:
     tools = RepoTools(root)
     history: list[dict] = [{"role": "user", "content": user_prompt}]
@@ -46,17 +50,36 @@ def run_agent(
     tool_calls = 0
     steps = 0
     answer_parts: list[str] = []
+    budget = max_output_tokens
+    cutoffs = 0
+    nudged = False
 
     while True:
         steps += 1
         out_of_budget = steps > max_steps
-        if out_of_budget:
+        if out_of_budget and not nudged:
             history.append({"role": "user", "content": prompts.FINAL_NUDGE})
-        turn = client.step(system, history, None if out_of_budget else TOOL_SPECS)
+            nudged = True
+        turn = client.step(system, history, None if out_of_budget else TOOL_SPECS, budget)
         _merge_usage(usage, turn.usage)
-        history.extend(turn.raw_items)
 
-        if turn.tool_calls and not out_of_budget:
+        if turn.truncated and cutoffs < MAX_CUTOFFS:
+            cutoffs += 1
+            # The output limit includes reasoning, and the same budget tends to stop in the
+            # same place, so every cut-off turn doubles it (up to the API maximum).
+            budget = min(budget * 2, MAX_OUTPUT_TOKENS)
+            if turn.tool_calls or not turn.text:
+                # Tool calls in a cut-off turn may be incomplete, so drop the turn and ask again.
+                log("  output hit the length limit, retrying with a larger budget")
+                continue
+            log("  output hit the length limit, asking the model to continue")
+            history.extend(turn.raw_items)
+            answer_parts.append(turn.text)
+            history.append({"role": "user", "content": prompts.CONTINUE_NUDGE})
+            continue
+
+        history.extend(turn.raw_items)
+        if turn.tool_calls and not out_of_budget and not turn.truncated:
             results = []
             for call in turn.tool_calls:
                 tool_calls += 1
@@ -66,10 +89,6 @@ def run_agent(
             continue
 
         answer_parts.append(turn.text)
-        if turn.truncated and len(answer_parts) < 4:
-            log("  output hit the length limit, asking the model to continue")
-            history.append({"role": "user", "content": prompts.CONTINUE_NUDGE})
-            continue
         break
 
     markdown = "".join(answer_parts).strip() + "\n"

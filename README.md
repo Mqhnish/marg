@@ -12,6 +12,8 @@ export BHARATCODE_API_KEY=bc_live_...      # free for students at bharatcode.ai/
 marg guide path/to/repo                     # writes path/to/repo/ONBOARDING.md
 ```
 
+**See real output:** [Marg's onboarding guide to its own code](examples/marg-ONBOARDING.md), written by Marg on `qwen-3.8-27b` in 8 minutes and 9 agent steps. 88 of its 89 citations are verified against lines the agent read; the other points at a real file it didn't open.
+
 ## Why
 
 Joining a new codebase usually means a week of clicking through files and asking "where does X happen?". READMEs explain how to install, rarely how the code fits together. LLM chat helps, but answers about code you haven't read are hard to trust.

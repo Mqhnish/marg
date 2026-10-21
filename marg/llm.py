@@ -29,6 +29,7 @@ RETRY_STATUSES = {429, 500, 502, 503, 504}
 # Socket timeouts only fire when no bytes arrive, so one request held open by the server
 # froze a real run for 73 minutes. This is a hard wall-clock limit per request.
 REQUEST_DEADLINE = 900
+WAIT_LOG_EVERY = 60  # seconds between "still waiting" lines, so a slow queue doesn't look like a hang
 MAX_OUTPUT_TOKENS = 32_000  # BharatCode's documented ceiling, reasoning included
 
 
@@ -127,6 +128,7 @@ class Client:
         transport: Transport | None = None,
         max_retries: int = 6,
         sleep: Callable[[float], None] | None = None,
+        log: Callable[[str], None] | None = None,
     ):
         self.api_key = api_key or os.environ.get("BHARATCODE_API_KEY")
         self.base_url = (base_url or os.environ.get("BHARATCODE_BASE_URL") or DEFAULT_BASE_URL).rstrip("/")
@@ -137,6 +139,7 @@ class Client:
         self.transport = transport or http_transport
         self.max_retries = max_retries
         self.sleep = sleep or (lambda seconds: time.sleep(seconds))
+        self.log = log or (lambda _msg: None)
         if not self.api_key and transport is None:
             raise LLMError(
                 "BHARATCODE_API_KEY is not set. Get a key at https://bharatcode.ai/account "
@@ -153,15 +156,31 @@ class Client:
         delay = 2.0
         for attempt in range(self.max_retries + 1):
             try:
-                return self.transport(url, headers, body)
+                return self._send(url, headers, body)
             except LLMError as exc:
                 retry = getattr(exc, "status", None) in RETRY_STATUSES or getattr(exc, "retryable", False)
                 if retry and attempt < self.max_retries:
+                    self.log(f"  {str(exc)[:160]}; retrying in {delay:.0f}s ({attempt + 1}/{self.max_retries})")
                     self.sleep(delay)
                     delay = min(delay * 2, 30)
                     continue
                 raise
         raise LLMError("unreachable")
+
+    def _send(self, url: str, headers: dict, body: dict) -> dict:
+        """Call the transport, logging every minute while the model is still working."""
+        done = threading.Event()
+        started = time.monotonic()
+
+        def heartbeat() -> None:
+            while not done.wait(WAIT_LOG_EVERY):
+                self.log(f"  still waiting for the model ({(time.monotonic() - started) / 60:.0f} min)")
+
+        threading.Thread(target=heartbeat, daemon=True).start()
+        try:
+            return self.transport(url, headers, body)
+        finally:
+            done.set()
 
     # ---------- public ----------
     def step(self, system: str, history: list[dict], tools: list[dict] | None, max_output_tokens: int = 8000) -> Turn:

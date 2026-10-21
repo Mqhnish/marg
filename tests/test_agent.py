@@ -301,3 +301,23 @@ def test_citations_inside_indian_language_prose_are_checked(sample_repo):
     report = check_citations("राउट `routes.py:3` में रजिस्टर होते हैं, और ऐप `app.py:4-5` में बनता है।", sample_repo,
                              {"app.py": 8, "routes.py": 6}, {"app.py": [(1, 8)], "routes.py": [(1, 6)]})
     assert report.valid == ["routes.py:3", "app.py:4-5"]
+
+
+def test_retries_and_long_waits_are_logged(sample_repo, monkeypatch):
+    import time
+
+    monkeypatch.setattr("marg.llm.WAIT_LOG_EVERY", 0.05)
+    busy = LLMError("HTTP 503: model busy")
+    busy.status = 503
+
+    def slow_then_ok(url, headers, body, _script=[busy]):
+        if _script:
+            raise _script.pop()
+        time.sleep(0.3)
+        return responses_text("ok")
+
+    logs = []
+    client = Client(api_key="k", transport=slow_then_ok, sleep=lambda s: None, log=logs.append)
+    assert ask(client, sample_repo, "q").markdown.strip() == "ok"
+    assert "  HTTP 503: model busy; retrying in 2s (1/6)" in logs
+    assert any(line.startswith("  still waiting for the model") for line in logs)

@@ -13,9 +13,10 @@ def make_server(script, seen):
             body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
             seen.append((self.path, self.headers.get("Authorization"), body))
             status, payload = script.pop(0)
-            data = json.dumps(payload).encode()
+            streamed = isinstance(payload, str)  # a str is sent as-is, as a server-sent event stream
+            data = payload.encode() if streamed else json.dumps(payload).encode()
             self.send_response(status)
-            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Type", "text/event-stream" if streamed else "application/json")
             self.send_header("x-request-id", "req_test")
             self.send_header("Content-Length", str(len(data)))
             self.end_headers()
@@ -91,6 +92,8 @@ def test_non_json_body_becomes_retryable_llm_error(monkeypatch):
     from marg.llm import LLMError, http_transport
 
     class HtmlPage:
+        headers = {"Content-Type": "text/html"}
+
         def __enter__(self):
             return self
 
@@ -183,3 +186,44 @@ def test_guide_is_written_as_utf8_whatever_the_locale(sample_repo, monkeypatch, 
     assert code == 0
     assert encodings == ["utf-8"]
     assert out.read_bytes().decode("utf-8").startswith("# गाइड")
+
+
+
+def sse(*events, queued=3):
+    """A BharatCode-style event stream: queue keepalives, then the given events."""
+    text = ": bharatcode queued\n\n" * queued
+    for event in events:
+        text += f"event: {event['type']}\ndata: {json.dumps(event)}\n\n"
+    return text
+
+
+def completed(output):
+    return {"type": "response.completed", "response": {"status": "completed", "output": output,
+                                                       "usage": {"input_tokens": 10, "output_tokens": 5}}}
+
+
+def test_streamed_guide_end_to_end(sample_repo, monkeypatch, tmp_path):
+    script = [
+        (200, sse({"type": "response.created"}, completed([
+            {"type": "function_call", "call_id": "c1", "name": "read_file", "arguments": "{\"path\": \"app.py\"}"}]))),
+        (200, sse({"type": "response.failed", "response": {"error": {"message": "model busy"}}})),
+        (200, sse({"type": "response.output_text.delta", "delta": "# Onboarding"}, queued=0)),  # ends early
+        (200, sse({"type": "response.output_text.delta", "delta": "# Onboarding"}, completed([
+            {"type": "message", "role": "assistant", "content": [
+                {"type": "output_text", "text": "# Onboarding guide: demo\nEntry point is `app.py:7-8`.\n"}]}]))),
+    ]
+    seen = []
+    server = make_server(script, seen)
+    monkeypatch.setenv("BHARATCODE_API_KEY", "bc_live_testkey123")
+    monkeypatch.setattr("marg.llm.time.sleep", lambda s: None)
+    out = tmp_path / "GUIDE.md"
+    try:
+        code = main(["guide", str(sample_repo), "-o", str(out), "-q",
+                     "--base-url", f"http://127.0.0.1:{server.server_port}/api/model/v1"])
+    finally:
+        server.shutdown()
+    assert code == 0
+    assert all(body["stream"] is True for _, _, body in seen)
+    assert len(seen) == 4  # the failed and the cut-short streams were retried
+    assert "Entry point is `app.py:7-8`." in out.read_text()
+    assert "1 verified" in out.read_text()

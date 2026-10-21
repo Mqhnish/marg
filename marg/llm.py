@@ -27,8 +27,9 @@ DEFAULT_BASE_URL = "https://bharatcode.ai/api/model/v1"
 DEFAULT_MODEL = "qwen-3.8-27b"
 RETRY_STATUSES = {429, 500, 502, 503, 504}
 # Socket timeouts only fire when no bytes arrive, so one request held open by the server
-# froze a real run for 73 minutes. This is a hard wall-clock limit per request.
-REQUEST_DEADLINE = 900
+# froze a real run for 73 minutes. This is a hard wall-clock limit per request. Streamed
+# requests stay alive through BharatCode's queue, so the limit leaves room for a long write.
+REQUEST_DEADLINE = 1800
 WAIT_LOG_EVERY = 60  # seconds between "still waiting" lines, so a slow queue doesn't look like a hang
 MAX_OUTPUT_TOKENS = 32_000  # BharatCode's documented ceiling, reasoning included
 
@@ -94,6 +95,8 @@ def _post_json(url: str, headers: dict, body: dict, timeout: float = 600) -> dic
     req = urllib.request.Request(url, data=data, headers=headers, method="POST")
     try:
         with urllib.request.urlopen(req, timeout=timeout, context=ssl_context()) as resp:
+            if "text/event-stream" in (resp.headers.get("Content-Type") or ""):
+                return _read_stream(resp, url)
             raw = resp.read().decode(errors="replace")
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode(errors="replace")[:500]
@@ -116,6 +119,37 @@ def _post_json(url: str, headers: dict, body: dict, timeout: float = 600) -> dic
         err = LLMError(f"response from {url} was not JSON: {raw[:200]!r}")
         err.retryable = True  # type: ignore[attr-defined]
         raise err from exc
+
+
+def _read_stream(resp, url: str) -> dict:
+    """Read a Responses API event stream and return the final response object.
+
+    Non-streaming requests were cut off after about 5 minutes, counting time spent in
+    BharatCode's queue. While a streamed request waits, the server sends
+    `: bharatcode queued` comments every few seconds, which keeps the connection alive.
+    """
+    for raw in resp:
+        line = raw.decode("utf-8", errors="replace").strip()
+        if not line.startswith("data:"):
+            continue  # event names, blank lines and keepalive comments
+        payload = line[5:].strip()
+        if payload == "[DONE]":
+            break
+        try:
+            event = json.loads(payload)
+        except json.JSONDecodeError:
+            continue
+        kind = event.get("type")
+        if kind in ("response.completed", "response.incomplete"):
+            return event["response"]
+        if kind in ("response.failed", "error"):
+            detail = (event.get("response") or {}).get("error") or event.get("error") or event
+            err = LLMError(f"stream from {url} failed: {str(detail)[:300]}")
+            err.retryable = True  # type: ignore[attr-defined]
+            raise err
+    err = LLMError(f"stream from {url} ended without a final response")
+    err.retryable = True  # type: ignore[attr-defined]
+    raise err
 
 
 class Client:
@@ -194,6 +228,7 @@ class Client:
             "model": self.model,
             "input": [{"role": "system", "content": system}, *history],
             "store": False,
+            "stream": True,
             "max_output_tokens": max_output_tokens,
         }
         if tools:

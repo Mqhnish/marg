@@ -78,7 +78,7 @@ def check_citations(markdown: str, root: str | Path, files_read: dict[str, int],
     return report
 
 
-def render_footer(report: CitationReport, steps: int, model: str) -> str:
+def render_footer(report: CitationReport, steps: int, model: str, extra: str = "") -> str:
     lines = [
         "",
         "---",
@@ -87,7 +87,7 @@ def render_footer(report: CitationReport, steps: int, model: str) -> str:
         f"in {steps} agent steps. Citations checked: {len(report.valid)} verified against files the agent read"
         + (f", {len(report.unread)} point to real code the agent did not read" if report.unread else "")
         + (f", {len(report.problems)} could not be verified (listed below)" if report.problems else "")
-        + ".</sub>",
+        + "." + (f" {extra}" if extra else "") + "</sub>",
     ]
     if report.problems:
         lines.append("")

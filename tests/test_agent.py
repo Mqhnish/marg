@@ -327,3 +327,38 @@ def test_guides_are_saved_with_repaired_diagrams(sample_repo):
     transport = ScriptedTransport([responses_text("# Onboarding guide: demo\n```mermaid\nflowchart LR\n  A -->|next()| B\n```\n")])
     result = write_guide(Client(api_key="k", transport=transport), sample_repo)
     assert 'A -->|"next()"| B' in result.markdown
+
+
+TAMIL_DRAFT = "# வழிகாட்டி (Onboarding guide): demo\nஎன்ட்ரி `app.py:4-5` இல் உள்ளது, budget用完 ஆனால் repo-வ을 பார்.\n"
+
+
+def test_wrong_script_words_are_repaired_and_reported(sample_repo):
+    fixed = "# வழிகாட்டி (Onboarding guide): demo\nஎன்ட்ரி `app.py:4-5` இல் உள்ளது, budget முடிந்தால் repo-வை பார்.\n"
+    transport = ScriptedTransport([responses_call("c1", "read_file", {"path": "app.py"}),
+                                   responses_text(TAMIL_DRAFT), responses_text(fixed)])
+    result = write_guide(Client(api_key="k", transport=transport), sample_repo, lang="ta")
+    _, repair = transport.requests[-1]
+    assert "wrong script" in repair["input"][0]["content"] and "tools" not in repair
+    assert "budget用完, repo-வ을" in repair["input"][1]["content"]
+    assert "budget முடிந்தால் repo-வை" in result.markdown
+    assert "Script check: 2 word(s) in the wrong script, 2 repaired." in result.markdown
+    assert result.citations.valid == ["app.py:4-5"]
+
+
+def test_repair_that_touches_code_is_rejected(sample_repo):
+    tampered = TAMIL_DRAFT.replace("`app.py:4-5`", "`app.py:4`").replace("用完", "").replace("을", "ை")
+    transport = ScriptedTransport([responses_text(TAMIL_DRAFT), responses_text(tampered)])
+    result = write_guide(Client(api_key="k", transport=transport), sample_repo, lang="ta")
+    assert "budget用完" in result.markdown  # draft kept
+    assert "0 repaired; not repaired: `budget用完`, `repo-வ을`." in result.markdown
+
+
+def test_clean_drafts_and_english_need_no_repair_request(sample_repo):
+    clean = "# வழிகாட்டி (Onboarding guide): demo\nஎன்ட்ரி `app.py:4-5` இல் உள்ளது.\n"
+    transport = ScriptedTransport([responses_text(clean)])
+    result = write_guide(Client(api_key="k", transport=transport), sample_repo, lang="ta")
+    assert len(transport.requests) == 1
+    assert "Script check: no words in the wrong script." in result.markdown
+    english = ScriptedTransport([responses_text(GUIDE)])
+    assert "Script check" not in write_guide(Client(api_key="k", transport=english), sample_repo).markdown
+    assert len(english.requests) == 1

@@ -11,6 +11,7 @@ from typing import Callable
 from marg import prompts
 from marg.llm import MAX_OUTPUT_TOKENS, Client, LLMError
 from marg.mermaid import fix_mermaid
+from marg.script import check_and_repair
 from marg.repomap import build_repo_map, render_summary
 from marg.tools import TOOL_SPECS, RepoTools
 from marg.verify import CitationReport, check_citations, render_footer
@@ -73,6 +74,7 @@ def run_agent(
     footer: bool = True,
     max_output_tokens: int = START_OUTPUT_TOKENS,
     title_first: bool = False,
+    lang: str = "en",
 ) -> AgentResult:
     tools = RepoTools(root)
     history: list[dict] = [{"role": "user", "content": user_prompt}]
@@ -140,9 +142,15 @@ def run_agent(
     markdown, repairs = fix_mermaid(markdown)
     if repairs:
         log(f"  repaired {repairs} Mermaid label(s) so the diagram renders")
+    script_note = ""
+    if lang != "en":
+        markdown, script = check_and_repair(client, markdown, lang, log)
+        _merge_usage(usage, script.usage)
+        script_note = script.note()
+        log("  " + script_note)
     report = check_citations(markdown, root, tools.files_read, tools.ranges_read)
     if footer:
-        markdown += render_footer(report, steps, client.model)
+        markdown += render_footer(report, steps, client.model, script_note)
     return AgentResult(markdown, steps, tool_calls, tools.files_read, report, usage)
 
 
@@ -150,11 +158,13 @@ def write_guide(client: Client, root: str | Path, max_steps: int = 30, log: Logg
                 lang: str = "en") -> AgentResult:
     summary = render_summary(build_repo_map(root))
     system = prompts.GUIDE_SYSTEM + prompts.language_rules(lang)
-    return run_agent(client, root, system, prompts.guide_user_prompt(summary), max_steps, log, title_first=True)
+    return run_agent(client, root, system, prompts.guide_user_prompt(summary), max_steps, log, title_first=True,
+                     lang=lang)
 
 
 def ask(client: Client, root: str | Path, question: str, max_steps: int = 15, log: Logger = lambda _m: None,
         lang: str = "en") -> AgentResult:
     summary = render_summary(build_repo_map(root))
     system = prompts.ASK_SYSTEM + prompts.language_rules(lang, guide=False)
-    return run_agent(client, root, system, prompts.ask_user_prompt(summary, question), max_steps, log, footer=False)
+    return run_agent(client, root, system, prompts.ask_user_prompt(summary, question), max_steps, log, footer=False,
+                     lang=lang)

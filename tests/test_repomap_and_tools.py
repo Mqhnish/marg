@@ -64,3 +64,15 @@ def test_bad_tool_calls_return_errors_not_exceptions(sample_repo):
 def test_redact_generic_assignment():
     assert redact('password = "hunter2hunter2"') == 'password = "[REDACTED]"'
     assert "bc_live" not in redact("export BHARATCODE_API_KEY=bc_live_abcdef123456")
+
+
+def test_bad_argument_values_and_read_errors_return_errors(sample_repo, monkeypatch):
+    tools = RepoTools(sample_repo)
+    assert tools.call("read_file", {"path": "app.py", "end_line": "end"}).startswith("error: read_file failed")
+    assert tools.call("read_file", {"path": 123}).startswith("error: read_file failed")
+
+    def unreadable(*args, **kwargs):
+        raise PermissionError("permission denied")
+
+    monkeypatch.setattr("pathlib.Path.read_text", unreadable)
+    assert "permission denied" in tools.call("read_file", {"path": "app.py"})

@@ -135,6 +135,9 @@ class RepoTools:
             return f"error: bad arguments for {name}: {exc}"
         except ToolError as exc:
             return f"error: {exc}"
+        except (ValueError, AttributeError, OSError) as exc:
+            # Bad argument values and unreadable files go back to the model instead of ending the run.
+            return f"error: {name} failed: {exc}"
 
 
 TOOL_SPECS = [

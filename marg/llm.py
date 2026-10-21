@@ -10,6 +10,7 @@ caller replays the full history every request with store=false.
 
 from __future__ import annotations
 
+import http.client
 import json
 import os
 import socket
@@ -65,7 +66,7 @@ def http_transport(url: str, headers: dict, body: dict, timeout: float = 600) ->
     req = urllib.request.Request(url, data=data, headers=headers, method="POST")
     try:
         with urllib.request.urlopen(req, timeout=timeout, context=ssl_context()) as resp:
-            return json.loads(resp.read().decode())
+            raw = resp.read().decode(errors="replace")
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode(errors="replace")[:500]
         request_id = exc.headers.get("x-request-id", "n/a") if exc.headers else "n/a"
@@ -76,8 +77,15 @@ def http_transport(url: str, headers: dict, body: dict, timeout: float = 600) ->
         err = LLMError(f"could not reach {url}: {exc.reason}")
         err.retryable = isinstance(exc.reason, (TimeoutError, socket.timeout))  # type: ignore[attr-defined]
         raise err from exc
-    except (TimeoutError, socket.timeout, ConnectionError) as exc:
+    except (TimeoutError, socket.timeout, ConnectionError, http.client.HTTPException) as exc:
         err = LLMError(f"no response from {url} ({exc.__class__.__name__}: {exc})")
+        err.retryable = True  # type: ignore[attr-defined]
+        raise err from exc
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as exc:
+        # A proxy or maintenance page can answer 200 with HTML.
+        err = LLMError(f"response from {url} was not JSON: {raw[:200]!r}")
         err.retryable = True  # type: ignore[attr-defined]
         raise err from exc
 
@@ -90,7 +98,7 @@ class Client:
         model: str | None = None,
         api_style: str = "responses",
         transport: Transport | None = None,
-        max_retries: int = 4,
+        max_retries: int = 6,
         sleep: Callable[[float], None] | None = None,
     ):
         self.api_key = api_key or os.environ.get("BHARATCODE_API_KEY")
@@ -149,11 +157,10 @@ class Client:
         for item in data.get("output", []):
             kind = item.get("type")
             if kind == "message":
-                for part in item.get("content", []):
-                    if part.get("type") in {"output_text", "text"}:
-                        texts.append(part.get("text", ""))
-                replay.append({"role": "assistant", "content": "".join(
-                    p.get("text", "") for p in item.get("content", []) if p.get("type") in {"output_text", "text"})})
+                text = "".join(p.get("text", "") for p in item.get("content", []) if p.get("type") in {"output_text", "text"})
+                texts.append(text)
+                if text:  # an empty assistant message is not worth replaying, and strict servers reject it
+                    replay.append({"role": "assistant", "content": text})
             elif kind == "function_call":
                 call = ToolCall(item.get("call_id") or item.get("id", ""), item["name"], item.get("arguments", "{}"))
                 calls.append(call)

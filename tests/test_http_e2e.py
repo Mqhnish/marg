@@ -83,3 +83,24 @@ def test_read_timeout_becomes_retryable_llm_error(monkeypatch):
     with pytest.raises(LLMError) as info:
         http_transport("http://example.invalid/v1/responses", {}, {})
     assert info.value.retryable is True
+
+
+def test_non_json_body_becomes_retryable_llm_error(monkeypatch):
+    import pytest
+
+    from marg.llm import LLMError, http_transport
+
+    class HtmlPage:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return b"<html>Down for maintenance</html>"
+
+    monkeypatch.setattr("marg.llm.urllib.request.urlopen", lambda *a, **k: HtmlPage())
+    with pytest.raises(LLMError, match="not JSON") as info:
+        http_transport("http://example.invalid/v1/responses", {}, {})
+    assert info.value.retryable is True

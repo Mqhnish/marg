@@ -183,3 +183,36 @@ def test_timeouts_are_retried(sample_repo):
     transport = ScriptedTransport([slow, responses_text("ok")])
     client = Client(api_key="k", transport=transport, sleep=lambda s: None)
     assert ask(client, sample_repo, "q").markdown.strip() == "ok"
+
+
+def test_api_failure_mid_run_still_writes_from_what_was_read(sample_repo):
+    down = LLMError("HTTP 400: bad request")
+    down.status = 400
+    transport = ScriptedTransport([
+        responses_call("c1", "read_file", {"path": "app.py"}),
+        down,
+        responses_text(GUIDE),
+    ])
+    client = Client(api_key="k", transport=transport)
+    result = write_guide(client, sample_repo, max_steps=10)
+    _, last = transport.requests[-1]
+    assert "tools" not in last
+    assert "tool budget" in last["input"][-1]["content"]
+    assert result.markdown.startswith("# Onboarding guide: demo")
+
+
+def test_api_failure_before_any_reading_is_raised(sample_repo):
+    down = LLMError("HTTP 400")
+    down.status = 400
+    client = Client(api_key="k", transport=ScriptedTransport([down]))
+    with pytest.raises(LLMError):
+        write_guide(client, sample_repo)
+
+
+def test_empty_assistant_message_is_not_replayed(sample_repo):
+    turn = responses_call("c1", "read_file", {"path": "app.py"})
+    turn["output"].insert(0, {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": ""}]})
+    transport = ScriptedTransport([turn, responses_text("done")])
+    ask(Client(api_key="k", transport=transport), sample_repo, "q")
+    _, last = transport.requests[-1]
+    assert not [i for i in last["input"] if i.get("role") == "assistant"]

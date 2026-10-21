@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Callable
 
 from marg import prompts
-from marg.llm import MAX_OUTPUT_TOKENS, Client
+from marg.llm import MAX_OUTPUT_TOKENS, Client, LLMError
 from marg.repomap import build_repo_map, render_summary
 from marg.tools import TOOL_SPECS, RepoTools
 from marg.verify import CitationReport, check_citations, render_footer
@@ -60,7 +60,15 @@ def run_agent(
         if out_of_budget and not nudged:
             history.append({"role": "user", "content": prompts.FINAL_NUDGE})
             nudged = True
-        turn = client.step(system, history, None if out_of_budget else TOOL_SPECS, budget)
+        try:
+            turn = client.step(system, history, None if out_of_budget else TOOL_SPECS, budget)
+        except LLMError as exc:
+            if out_of_budget or tool_calls == 0:
+                raise
+            # Don't throw away what was already read: go straight to the write step.
+            log(f"  API error, writing from what was read so far: {exc}")
+            max_steps = steps
+            continue
         _merge_usage(usage, turn.usage)
 
         if turn.truncated and cutoffs < MAX_CUTOFFS:

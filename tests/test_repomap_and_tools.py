@@ -108,3 +108,13 @@ def test_root_gitignore_applies_when_listing_a_subdirectory(tmp_path):
     paths = {f.path for f in build_repo_map(tmp_path).files}
     assert "src/app/config/settings.py" in paths  # /config is anchored to the root
     assert "config/local.py" not in paths
+
+
+def test_own_entry_points_come_first_and_demo_ones_are_counted(tmp_path):
+    for rel in ["index.js", "src/server.js", "examples/a/index.js", "examples/b/index.js", "test/app.js"]:
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text("x\n")
+    repo = build_repo_map(tmp_path)
+    assert repo.entry_points[:2] == ["index.js", "src/server.js"]
+    line = next(l for l in render_summary(repo).splitlines() if l.startswith("Likely entry points"))
+    assert line == "Likely entry points: index.js, src/server.js (and 3 more, mostly in example, test or docs folders)"

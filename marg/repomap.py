@@ -56,6 +56,17 @@ ENTRY_POINT_NAMES = {
     "Main.java", "Program.cs", "index.html",
 }
 
+# Entry points under these directories are demos, tests or docs, not the project's own.
+SECONDARY_DIRS = {
+    "example", "examples", "demo", "demos", "sample", "samples", "test", "tests", "spec",
+    "fixtures", "docs", "doc", "benchmark", "benchmarks", "bench",
+}
+MAX_ENTRY_POINTS_SHOWN = 8
+
+
+def is_secondary(path: str) -> bool:
+    return any(part.lower() in SECONDARY_DIRS for part in path.split("/")[:-1])
+
 SECRET_PATTERNS = [
     ".env", ".env.*", "*.pem", "*.key", "*.p12", "*.pfx", "id_rsa*", "id_ed25519*",
     "*credentials*", "*secret*", ".npmrc", ".pypirc", "*.keystore",
@@ -193,7 +204,21 @@ def build_repo_map(root: str | Path) -> RepoMap:
                     repo.readme = abspath.read_text(encoding="utf-8", errors="ignore")[:3000]
                 except OSError:
                     pass
+    repo.entry_points.sort(key=lambda p: (is_secondary(p), p.count("/"), p))
     return repo
+
+
+def render_entry_points(repo: RepoMap) -> str:
+    """The project's own entry points first; ones in example or test folders only as a count."""
+    primary = [p for p in repo.entry_points if not is_secondary(p)]
+    shown = (primary or repo.entry_points)[:MAX_ENTRY_POINTS_SHOWN]
+    if not shown:
+        return "none found"
+    text = ", ".join(shown)
+    hidden = len(repo.entry_points) - len(shown)
+    if hidden:
+        text += f" (and {hidden} more, mostly in example, test or docs folders)" if primary else f" (and {hidden} more)"
+    return text
 
 
 def render_tree(repo: RepoMap, max_entries: int = 250, max_per_dir: int = 25) -> str:
@@ -230,7 +255,7 @@ def render_summary(repo: RepoMap) -> str:
         f"Files: {len(repo.files)} text files, {repo.total_lines} lines",
         f"Languages: {langs}",
         f"Manifests: {', '.join(repo.manifests) or 'none found'}",
-        f"Likely entry points: {', '.join(repo.entry_points) or 'none found'}",
+        f"Likely entry points: {render_entry_points(repo)}",
     ]
     if repo.skipped_secrets:
         parts.append(f"Secret-looking files skipped: {repo.skipped_secrets}")

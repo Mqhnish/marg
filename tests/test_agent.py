@@ -216,3 +216,34 @@ def test_empty_assistant_message_is_not_replayed(sample_repo):
     ask(Client(api_key="k", transport=transport), sample_repo, "q")
     _, last = transport.requests[-1]
     assert not [i for i in last["input"] if i.get("role") == "assistant"]
+
+
+def test_compact_history_stubs_oldest_outputs_first():
+    from marg.agent import STUB, compact_history
+
+    big = "x" * 1000 + "\n[app.py: lines 1-400 of 900]"
+    history = [{"role": "user", "content": "map"}]
+    for n in range(5):
+        history.append({"type": "function_call", "call_id": f"c{n}", "name": "read_file", "arguments": "{}"})
+        history.append({"type": "function_call_output", "call_id": f"c{n}", "output": big})
+
+    assert compact_history(history, budget=10**6) == 0
+    stubbed = compact_history(history, budget=3000, keep_recent=2)
+    outputs = [i["output"] for i in history if i.get("type") == "function_call_output"]
+    assert stubbed == 3
+    assert all(o == STUB + "[app.py: lines 1-400 of 900]" for o in outputs[:3])
+    assert outputs[3:] == [big, big]
+    assert [i["call_id"] for i in history if i.get("type") == "function_call_output"] == ["c0", "c1", "c2", "c3", "c4"]
+
+
+def test_long_runs_resend_shortened_history(sample_repo, monkeypatch):
+    monkeypatch.setattr("marg.agent.HISTORY_CHAR_BUDGET", 2000)
+    monkeypatch.setattr("marg.agent.KEEP_RECENT_OUTPUTS", 1)
+    transport = ScriptedTransport(
+        [responses_call(f"c{n}", "read_file", {"path": "app.py"}) for n in range(4)] + [responses_text(GUIDE)]
+    )
+    write_guide(Client(api_key="k", transport=transport), sample_repo, max_steps=10)
+    _, last = transport.requests[-1]
+    outputs = [i["output"] for i in last["input"] if i.get("type") == "function_call_output"]
+    assert outputs[0].startswith("[output omitted") and "[app.py: lines 1-8 of 8]" in outputs[0]
+    assert "from flask import Flask" in outputs[-1]

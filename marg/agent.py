@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
@@ -16,6 +17,11 @@ Logger = Callable[[str], None]
 
 START_OUTPUT_TOKENS = 16_000
 MAX_CUTOFFS = 3
+# The whole history is resent every step, so its size drives both context use and token cost.
+# About 50k tokens; qwen-3.8-27b's window is 262k.
+HISTORY_CHAR_BUDGET = 200_000
+KEEP_RECENT_OUTPUTS = 6
+STUB = "[output omitted to save context; call the tool again if you need it] "
 
 
 @dataclass
@@ -32,6 +38,27 @@ def _merge_usage(total: dict, usage: dict) -> None:
     for key, value in (usage or {}).items():
         if isinstance(value, int):
             total[key] = total.get(key, 0) + value
+
+
+def compact_history(history: list[dict], budget: int = HISTORY_CHAR_BUDGET,
+                    keep_recent: int = KEEP_RECENT_OUTPUTS) -> int:
+    """Stub out the oldest tool outputs until the history fits the budget. Returns how many."""
+    size = sum(len(json.dumps(item)) for item in history)
+    outputs = [i for i in history if i.get("type") == "function_call_output" or i.get("role") == "tool"]
+    stubbed = 0
+    for item in outputs[:max(0, len(outputs) - keep_recent)]:
+        if size <= budget:
+            break
+        key = "output" if "output" in item else "content"
+        text = item[key]
+        if text.startswith(STUB):
+            continue
+        last_line = text.rstrip().rsplit("\n", 1)[-1]
+        stub = STUB + (last_line if last_line.startswith("[") else text[:80])
+        size -= len(text) - len(stub)
+        item[key] = stub
+        stubbed += 1
+    return stubbed
 
 
 def run_agent(
@@ -60,6 +87,8 @@ def run_agent(
         if out_of_budget and not nudged:
             history.append({"role": "user", "content": prompts.FINAL_NUDGE})
             nudged = True
+        if compact_history(history, HISTORY_CHAR_BUDGET, KEEP_RECENT_OUTPUTS):
+            log("  history is large, older tool output was shortened")
         try:
             turn = client.step(system, history, None if out_of_budget else TOOL_SPECS, budget)
         except LLMError as exc:

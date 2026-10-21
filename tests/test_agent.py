@@ -333,24 +333,34 @@ TAMIL_DRAFT = "# வழிகாட்டி (Onboarding guide): demo\nஎன்
 
 
 def test_wrong_script_words_are_repaired_and_reported(sample_repo):
-    fixed = "# வழிகாட்டி (Onboarding guide): demo\nஎன்ட்ரி `app.py:4-5` இல் உள்ளது, budget முடிந்தால் repo-வை பார்.\n"
+    fixes = json.dumps({"budget用完": "budget முடிந்தால்", "repo-வ을": "repo-வை"}, ensure_ascii=False)
     transport = ScriptedTransport([responses_call("c1", "read_file", {"path": "app.py"}),
-                                   responses_text(TAMIL_DRAFT), responses_text(fixed)])
+                                   responses_text(TAMIL_DRAFT), responses_text("```json\n" + fixes + "\n```")])
     result = write_guide(Client(api_key="k", transport=transport), sample_repo, lang="ta")
     _, repair = transport.requests[-1]
     assert "wrong script" in repair["input"][0]["content"] and "tools" not in repair
-    assert "budget用完, repo-வ을" in repair["input"][1]["content"]
-    assert "budget முடிந்தால் repo-வை" in result.markdown
+    assert '"budget用完" in:' in repair["input"][1]["content"] and "repo-வ을" in repair["input"][1]["content"]
+    assert repair["max_output_tokens"] == 4000
+    assert "budget முடிந்தால் ஆனால் repo-வை பார்" in result.markdown
     assert "Script check: 2 word(s) in the wrong script, 2 repaired." in result.markdown
     assert result.citations.valid == ["app.py:4-5"]
 
 
-def test_repair_that_touches_code_is_rejected(sample_repo):
-    tampered = TAMIL_DRAFT.replace("`app.py:4-5`", "`app.py:4`").replace("用完", "").replace("을", "ை")
-    transport = ScriptedTransport([responses_text(TAMIL_DRAFT), responses_text(tampered)])
+def test_unusable_repairs_are_ignored(sample_repo):
+    # one fix still has a wrong-script letter, one is for a word that was never flagged
+    fixes = json.dumps({"budget用完": "budget用", "app": "செயலி", "repo-வ을": "repo-வை"}, ensure_ascii=False)
+    transport = ScriptedTransport([responses_text(TAMIL_DRAFT), responses_text(fixes)])
     result = write_guide(Client(api_key="k", transport=transport), sample_repo, lang="ta")
-    assert "budget用完" in result.markdown  # draft kept
+    assert "budget用完" in result.markdown and "repo-வை" in result.markdown
+    assert "`app.py:4-5`" in result.markdown  # code never touched
+    assert "1 repaired; not repaired: `budget用完`." in result.markdown
+
+
+def test_repair_reply_that_is_not_json_keeps_the_draft(sample_repo):
+    transport = ScriptedTransport([responses_text(TAMIL_DRAFT), responses_text("Sorry, I can't help with that.")])
+    result = write_guide(Client(api_key="k", transport=transport), sample_repo, lang="ta")
     assert "0 repaired; not repaired: `budget用完`, `repo-வ을`." in result.markdown
+
 
 
 def test_clean_drafts_and_english_need_no_repair_request(sample_repo):

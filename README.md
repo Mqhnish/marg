@@ -12,7 +12,11 @@ export BHARATCODE_API_KEY=bc_live_...      # free for students at bharatcode.ai/
 marg guide path/to/repo                     # writes path/to/repo/ONBOARDING.md
 ```
 
-**See real output:** [Marg's onboarding guide to its own code](examples/marg-ONBOARDING.md), written by Marg on `qwen-3.8-27b` in 8 minutes and 9 agent steps. 88 of its 89 citations are verified against lines the agent read; the other points at a real file it didn't open.
+**See real output** from `qwen-3.8-27b` (how each was made is in [examples/](examples/README.md)):
+
+- [Express](examples/express-ONBOARDING.md), the Node.js web framework: 108 citations verified, 0 unverified. It even spotted a wrong return type in Express's own JSDoc for `req.query`.
+- [The same guide in Hindi](examples/express-ONBOARDING.hi.md), written with `--lang hi`: 98 verified, 0 unverified.
+- [Marg's guide to its own code](examples/marg-ONBOARDING.md): 88 verified, 0 unverified.
 
 ## Why
 

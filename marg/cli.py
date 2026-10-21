@@ -90,7 +90,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_guide = sub.add_parser("guide", help="write ONBOARDING.md for a repository")
     p_guide.add_argument("path", nargs="?", default=".")
     p_guide.add_argument("-o", "--output", help="where to write the guide (default: <repo>/ONBOARDING.md)")
-    p_guide.add_argument("--max-steps", type=int, default=30, help="tool-call budget (default 30)")
+    p_guide.add_argument("--max-steps", type=int, default=30, help="step budget: model turns before it must write (default 30)")
     add_llm_flags(p_guide)
     p_guide.set_defaults(func=cmd_guide)
 

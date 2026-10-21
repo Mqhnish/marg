@@ -18,7 +18,7 @@ marg guide path/to/repo                     # writes path/to/repo/ONBOARDING.md
 
 Joining a new codebase usually means a week of clicking through files and asking "where does X happen?". READMEs explain how to install, rarely how the code fits together. LLM chat helps, but answers about code you haven't read are hard to trust.
 
-Marg makes the model do the reading. It gets read-only tools, a tool budget, and a strict output format, and it has to cite what it read. Citations that point at lines it was never shown, or at line numbers that don't exist, are flagged in the guide footer.
+Marg makes the model do the reading. It gets read-only tools, a step budget, and a strict output format, and it has to cite what it read. Citations that point at lines it was never shown, or at line numbers that don't exist, are flagged in the guide footer.
 
 ## Commands
 
@@ -28,7 +28,7 @@ Marg makes the model do the reading. It gets read-only tools, a tool budget, and
 | `marg guide [path] [-o FILE]` | Explores the repo and writes an onboarding guide (default `ONBOARDING.md`) | Yes |
 | `marg ask "question" [path]` | Answers one question about the code, with citations | Yes |
 
-Useful flags: `--max-steps N` (tool budget, default 30 for guides), `--model ID` (default `qwen-3.8-27b`), `--api chat` (use Chat Completions instead of Responses), `--lang LANG` (see below), `-q` (quiet).
+Useful flags: `--max-steps N` (step budget: model turns before it must write, default 30 for guides), `--model ID` (default `qwen-3.8-27b`), `--api chat` (use Chat Completions instead of Responses), `--lang LANG` (see below), `-q` (quiet).
 
 ```bash
 marg ask "where are API routes registered and how is auth checked?" ~/code/my-service

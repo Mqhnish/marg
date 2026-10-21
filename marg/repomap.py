@@ -85,9 +85,22 @@ def load_gitignore(root: Path) -> list[str]:
 def is_ignored(rel: str, name: str, patterns: list[str]) -> bool:
     for pat in patterns:
         bare = pat.lstrip("/")
-        if fnmatch.fnmatch(name, bare) or fnmatch.fnmatch(rel, bare):
+        # As in git, a pattern with a slash at the start or in the middle is anchored to the root.
+        anchored = pat.startswith("/") or "/" in bare
+        if not anchored and fnmatch.fnmatch(name, bare):
             return True
-        if rel.startswith(bare + "/"):
+        if fnmatch.fnmatch(rel, bare) or rel.startswith(bare + "/"):
+            return True
+    return False
+
+
+def is_path_ignored(rel: str, patterns: list[str]) -> bool:
+    """True if the path, or any directory above it, is skipped by iter_files."""
+    parts = rel.split("/")
+    for i, part in enumerate(parts):
+        if i < len(parts) - 1 and part in ALWAYS_IGNORE_DIRS:
+            return True
+        if is_ignored("/".join(parts[:i + 1]), part, patterns):
             return True
     return False
 
@@ -131,10 +144,13 @@ def count_lines(path: Path, limit_bytes: int = 2_000_000) -> int:
         return 0
 
 
-def iter_files(root: Path):
-    """Yield (relative_path, absolute_path) for every non-ignored file."""
+def iter_files(root: Path, start: Path | None = None):
+    """Yield (path relative to root, absolute path) for every non-ignored file under start.
+
+    The root's .gitignore applies wherever the walk starts.
+    """
     patterns = load_gitignore(root)
-    for dirpath, dirnames, filenames in os.walk(root):
+    for dirpath, dirnames, filenames in os.walk(start or root):
         rel_dir = os.path.relpath(dirpath, root)
         rel_dir = "" if rel_dir == "." else rel_dir.replace(os.sep, "/")
         dirnames[:] = sorted(

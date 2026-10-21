@@ -87,3 +87,24 @@ def test_read_file_cuts_at_a_whole_line_and_records_what_was_shown(tmp_path):
     assert f"[big.py: lines 1-{end} of 300] (call read_file again" in out
     assert out.count("\n") == end  # end lines of code plus the footer line
     assert "has only 300 lines" in tools.call("read_file", {"path": "big.py", "start_line": 999})
+
+
+def test_tools_refuse_gitignored_and_dependency_paths(sample_repo):
+    tools = RepoTools(sample_repo)
+    assert "is ignored" in tools.call("read_file", {"path": "logs/out.log"})
+    assert "is ignored" in tools.call("read_file", {"path": "scratch.tmp"})
+    assert "is ignored" in tools.call("read_file", {"path": "node_modules/x.js"})
+    assert "is ignored" in tools.call("list_dir", {"path": "logs"})
+    assert tools.files_read == {}
+
+
+def test_root_gitignore_applies_when_listing_a_subdirectory(tmp_path):
+    (tmp_path / ".gitignore").write_text("generated/\n/config\n")
+    for rel in ["src/main.py", "src/generated/out.py", "config/local.py", "src/app/config/settings.py"]:
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text("x = 1\n")
+    tools = RepoTools(tmp_path)
+    assert tools.call("list_dir", {"path": "src"}).splitlines() == ["src/main.py", "src/app/config/settings.py"]
+    paths = {f.path for f in build_repo_map(tmp_path).files}
+    assert "src/app/config/settings.py" in paths  # /config is anchored to the root
+    assert "config/local.py" not in paths

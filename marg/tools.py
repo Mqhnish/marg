@@ -11,7 +11,7 @@ import json
 import re
 from pathlib import Path
 
-from marg.repomap import BINARY_EXTS, is_secret_file, iter_files
+from marg.repomap import BINARY_EXTS, is_path_ignored, is_secret_file, iter_files, load_gitignore
 
 MAX_READ_LINES = 400
 MAX_READ_CHARS = 24_000
@@ -46,6 +46,7 @@ class ToolError(Exception):
 class RepoTools:
     def __init__(self, root: str | Path):
         self.root = Path(root).resolve()
+        self.ignore = load_gitignore(self.root)
         self.files_read: dict[str, int] = {}  # path -> line count, for citation checks
         self.ranges_read: dict[str, list[tuple[int, int]]] = {}  # path -> line ranges actually shown
 
@@ -66,11 +67,12 @@ class RepoTools:
         target = self._resolve(path)
         if not target.is_dir():
             raise ToolError(f"'{path}' is not a directory")
-        prefix = self._rel(target)
-        prefix = "" if prefix == "." else prefix + "/"
+        rel_dir = self._rel(target)
+        if rel_dir != "." and is_path_ignored(rel_dir, self.ignore):
+            raise ToolError(f"'{path}' is ignored (.gitignore, dependencies or build output)")
         entries = []
-        for rel, abspath in iter_files(target):
-            entries.append(prefix + rel)
+        for rel, _abspath in iter_files(self.root, target):
+            entries.append(rel)
             if len(entries) >= MAX_LIST_ENTRIES:
                 entries.append(f"... truncated at {MAX_LIST_ENTRIES} entries")
                 break
@@ -82,6 +84,8 @@ class RepoTools:
             raise ToolError(f"'{path}' is not a file")
         if is_secret_file(target.name):
             raise ToolError(f"'{path}' looks like a secrets file and will not be read")
+        if is_path_ignored(self._rel(target), self.ignore):
+            raise ToolError(f"'{path}' is ignored (.gitignore, dependencies or build output) and will not be read")
         if target.suffix.lower() in BINARY_EXTS:
             raise ToolError(f"'{path}' is a binary file")
         text = target.read_text(errors="replace")

@@ -62,7 +62,7 @@ Marg sends parts of your code to the BharatCode API, so it is careful about what
 - Tools are **read-only** and **sandboxed** to the repo root. `../` paths and absolute paths outside the repo are refused.
 - **Secret files are never read**: `.env`, `*.pem`, `*.key`, `id_rsa*`, `*credentials*` and similar.
 - **Common token formats are redacted** from file contents before they are sent: OpenAI, BharatCode, GitHub, AWS, Google and Slack keys, private key blocks, and `password = "..."` style assignments.
-- `.gitignore`d paths, `node_modules`, virtualenvs and build output are skipped.
+- `.gitignore`d paths, `node_modules`, virtualenvs and build output are skipped, and the tools refuse to read them.
 - Your API key is read from the environment only.
 
 Redaction is a safety net, not a guarantee. Don't point Marg at code you aren't allowed to share with a third-party API.

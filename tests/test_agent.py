@@ -254,3 +254,15 @@ def test_citations_into_lines_never_shown_are_not_verified(sample_repo):
     report = check_citations(md, sample_repo, {"app.py": 8}, {"app.py": [(1, 3)]})
     assert report.valid == ["app.py:2", "app.py"]
     assert report.unread == ["app.py:5", "app.py:2-5"]
+
+
+def test_guide_drops_narration_before_the_title(sample_repo):
+    transport = ScriptedTransport([responses_text("I have enough to write the guide.\n\n" + GUIDE)])
+    result = write_guide(Client(api_key="k", transport=transport), sample_repo)
+    assert result.markdown.startswith("# Onboarding guide: demo")
+
+
+def test_system_paths_are_not_counted_as_citations(sample_repo):
+    report = check_citations("It falls back to `/etc/ssl/cert.pem`. Entry: `/app.py:4`.", sample_repo, {"app.py": 8})
+    assert report.problems == []
+    assert report.valid == ["/app.py:4"]

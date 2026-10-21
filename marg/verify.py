@@ -43,6 +43,10 @@ def check_citations(markdown: str, root: str | Path, files_read: dict[str, int],
         if start is None and "/" not in rel and not (root / rel).is_file():
             # bare names like `config.yaml` that are not real files are prose, not citations
             continue
+        if rel.startswith("/"):
+            if not (root / rel.lstrip("/")).is_file():
+                continue  # a path on the reader's machine, like `/etc/ssl/cert.pem`, not a repo citation
+            rel = rel.lstrip("/")
         token = match.group(0).strip("`")
         if token in seen:
             continue

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
@@ -70,6 +71,7 @@ def run_agent(
     log: Logger = lambda _msg: None,
     footer: bool = True,
     max_output_tokens: int = START_OUTPUT_TOKENS,
+    title_first: bool = False,
 ) -> AgentResult:
     tools = RepoTools(root)
     history: list[dict] = [{"role": "user", "content": user_prompt}]
@@ -129,6 +131,11 @@ def run_agent(
         break
 
     markdown = "".join(answer_parts).strip() + "\n"
+    if title_first:
+        # Models sometimes narrate ("I have enough to write the guide.") before the title.
+        title = re.search(r"^# ", markdown, re.M)
+        if title:
+            markdown = markdown[title.start():]
     report = check_citations(markdown, root, tools.files_read, tools.ranges_read)
     if footer:
         markdown += render_footer(report, steps, client.model)
@@ -137,7 +144,8 @@ def run_agent(
 
 def write_guide(client: Client, root: str | Path, max_steps: int = 30, log: Logger = lambda _m: None) -> AgentResult:
     summary = render_summary(build_repo_map(root))
-    return run_agent(client, root, prompts.GUIDE_SYSTEM, prompts.guide_user_prompt(summary), max_steps, log)
+    return run_agent(client, root, prompts.GUIDE_SYSTEM, prompts.guide_user_prompt(summary), max_steps, log,
+                     title_first=True)
 
 
 def ask(client: Client, root: str | Path, question: str, max_steps: int = 15, log: Logger = lambda _m: None) -> AgentResult:

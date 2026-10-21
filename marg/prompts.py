@@ -33,6 +33,7 @@ Rules:
 - Only cite files you have actually read with read_file.
 - If something is unclear or missing (no tests, no setup docs), say so plainly rather than inventing it.
 - Write plainly. No marketing language. No em dashes.
+- Reply with the guide only, starting at the `# Onboarding guide` line with nothing before it.
 """
 
 ASK_SYSTEM = """You are Marg, an expert engineer answering a question about this repository.

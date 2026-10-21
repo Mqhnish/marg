@@ -13,6 +13,8 @@ from __future__ import annotations
 import json
 import os
 import socket
+import ssl
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -48,12 +50,21 @@ class Turn:
 Transport = Callable[[str, dict, dict], dict]  # (url, headers, body) -> json
 
 
+def ssl_context() -> ssl.SSLContext:
+    ctx = ssl.create_default_context()
+    # python.org builds for macOS ship with no CA certificates until "Install Certificates.command"
+    # is run, so every HTTPS call fails. Fall back to the system bundle in that case.
+    if sys.platform == "darwin" and not ctx.get_ca_certs() and os.path.exists("/etc/ssl/cert.pem"):
+        ctx.load_verify_locations("/etc/ssl/cert.pem")
+    return ctx
+
+
 def http_transport(url: str, headers: dict, body: dict, timeout: float = 600) -> dict:
     # BharatCode queues requests when busy: a one-line reply has taken over 100 seconds.
     data = json.dumps(body).encode()
     req = urllib.request.Request(url, data=data, headers=headers, method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.urlopen(req, timeout=timeout, context=ssl_context()) as resp:
             return json.loads(resp.read().decode())
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode(errors="replace")[:500]

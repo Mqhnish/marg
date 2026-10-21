@@ -33,7 +33,7 @@ Rules:
 - Only cite files you have actually read with read_file.
 - If something is unclear or missing (no tests, no setup docs), say so plainly rather than inventing it.
 - Write plainly. No marketing language. No em dashes.
-- Reply with the guide only, starting at the `# Onboarding guide` line with nothing before it.
+- Reply with the guide only, starting at the `#` title line with nothing before it.
 """
 
 ASK_SYSTEM = """You are Marg, an expert engineer answering a question about this repository.
@@ -51,6 +51,54 @@ FINAL_NUDGE = (
 )
 
 CONTINUE_NUDGE = "Your previous output was cut off by the length limit. Continue exactly where you stopped."
+
+
+# code -> (English name, native name). Only the prose changes language: code, paths and
+# `path:line` citations stay exactly as written so the citation checker can still verify them.
+LANGUAGES = {
+    "en": ("English", "English"),
+    "hi": ("Hindi", "हिन्दी"),
+    "bn": ("Bengali", "বাংলা"),
+    "ta": ("Tamil", "தமிழ்"),
+    "te": ("Telugu", "తెలుగు"),
+    "mr": ("Marathi", "मराठी"),
+    "gu": ("Gujarati", "ગુજરાતી"),
+    "kn": ("Kannada", "ಕನ್ನಡ"),
+    "ml": ("Malayalam", "മലയാളം"),
+    "pa": ("Punjabi", "ਪੰਜਾਬੀ"),
+    "or": ("Odia", "ଓଡ଼ିଆ"),
+    "as": ("Assamese", "অসমীয়া"),
+    "ur": ("Urdu", "اردو"),
+}
+
+
+def find_language(name: str) -> str:
+    """Return the code for a language given as a code, English name or native name."""
+    wanted = name.strip().lower()
+    for code, (english, native) in LANGUAGES.items():
+        if wanted in {code, english.lower(), native}:
+            return code
+    choices = ", ".join(f"{code} ({english})" for code, (english, _) in LANGUAGES.items())
+    raise ValueError(f"unknown language '{name}'. Choose from: {choices}")
+
+
+def language_rules(code: str, guide: bool = True) -> str:
+    if code == "en":
+        return ""
+    english, native = LANGUAGES[code]
+    rules = [
+        f"Write {'the whole guide' if guide else 'your answer'} in {english} ({native}), "
+        "in the plain register developers in India use day to day.",
+        "Keep technical terms that developers normally say in English (API, commit, function, request, test) "
+        "in English rather than coining translations.",
+        "Never translate or transliterate code, commands, file paths, identifiers or the backticked "
+        "`path:line` citations. Copy them exactly, so they can be checked.",
+    ]
+    if guide:
+        rules.insert(2, f"Translate every heading, including the title, and put the English heading in brackets "
+                        f"after it, for example: `## <heading in {english}> (Run it locally)`.")
+        rules.append(f"In the Mermaid diagram, keep node ids as plain ASCII letters. Labels may be in {english}.")
+    return "\nLanguage:\n" + "".join(f"- {rule}\n" for rule in rules)
 
 
 def guide_user_prompt(repo_summary: str) -> str:

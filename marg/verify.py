@@ -62,7 +62,7 @@ def check_citations(markdown: str, root: str | Path, files_read: dict[str, int],
             try:
                 total = files_read.get(rel)
                 if total is None:
-                    total = len(path.read_text(errors="ignore").splitlines())
+                    total = len(path.read_text(encoding="utf-8", errors="ignore").splitlines())
             except OSError:
                 report.missing.append(token)
                 continue

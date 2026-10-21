@@ -1,6 +1,7 @@
 Project: Marg
 Category: Coding & developer tools
-Summary: Point Marg at any repository and it explores the code with read-only tools, then writes a grounded onboarding guide (ONBOARDING.md) with an architecture diagram, a walkthrough of one real flow, starter tasks and gotchas. Every file:line citation is checked against the files the agent actually read.
+Summary: Point Marg at any repository and it explores the code with read-only tools, then writes a grounded onboarding guide (ONBOARDING.md) with an architecture diagram, a walkthrough of one real flow, starter tasks and gotchas. Every file:line citation is checked against the lines the agent was actually shown.
+Languages: English plus 12 Indian languages via --lang (hi, bn, ta, te, mr, gu, kn, ml, pa, or, as, ur). Code and citations stay untranslated so they can still be checked.
 Author: Mohnish Rawat (GitHub: mqhnish)
 Repository: https://github.com/mqhnish/marg
 Licence: MIT

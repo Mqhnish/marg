@@ -74,7 +74,7 @@ def load_gitignore(root: Path) -> list[str]:
     if not path.is_file():
         return []
     patterns = []
-    for line in path.read_text(errors="ignore").splitlines():
+    for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
         line = line.strip()
         if not line or line.startswith("#") or line.startswith("!"):
             continue
@@ -190,7 +190,7 @@ def build_repo_map(root: str | Path) -> RepoMap:
         if repo.readme is None and name.lower() in {"readme.md", "readme.rst", "readme.txt", "readme"}:
             if "/" not in rel:
                 try:
-                    repo.readme = abspath.read_text(errors="ignore")[:3000]
+                    repo.readme = abspath.read_text(encoding="utf-8", errors="ignore")[:3000]
                 except OSError:
                     pass
     return repo

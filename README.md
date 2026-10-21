@@ -28,11 +28,22 @@ Marg makes the model do the reading. It gets read-only tools, a tool budget, and
 | `marg guide [path] [-o FILE]` | Explores the repo and writes an onboarding guide (default `ONBOARDING.md`) | Yes |
 | `marg ask "question" [path]` | Answers one question about the code, with citations | Yes |
 
-Useful flags: `--max-steps N` (tool budget, default 30 for guides), `--model ID` (default `qwen-3.8-27b`), `--api chat` (use Chat Completions instead of Responses), `-q` (quiet).
+Useful flags: `--max-steps N` (tool budget, default 30 for guides), `--model ID` (default `qwen-3.8-27b`), `--api chat` (use Chat Completions instead of Responses), `--lang LANG` (see below), `-q` (quiet).
 
 ```bash
 marg ask "where are API routes registered and how is auth checked?" ~/code/my-service
 ```
+
+## Guides in Indian languages
+
+Many developers read faster in their first language, so Marg can write the guide in Hindi (`hi`), Bengali (`bn`), Tamil (`ta`), Telugu (`te`), Marathi (`mr`), Gujarati (`gu`), Kannada (`kn`), Malayalam (`ml`), Punjabi (`pa`), Odia (`or`), Assamese (`as`) or Urdu (`ur`):
+
+```bash
+marg guide path/to/repo --lang hi -o ONBOARDING.hi.md
+marg ask "where is auth checked?" path/to/repo --lang Tamil
+```
+
+Only the prose changes. Code, commands, file paths and `path:line` citations are kept exactly as they are, so every citation is still checked. Headings are translated with the English kept in brackets, so a mixed team can follow either one. Technical words developers normally say in English (API, commit, request) stay in English.
 
 Here is `marg map` run on this repo. It works offline and is the head start the agent gets before it reads any code:
 

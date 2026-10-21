@@ -88,7 +88,7 @@ class RepoTools:
             raise ToolError(f"'{path}' is ignored (.gitignore, dependencies or build output) and will not be read")
         if target.suffix.lower() in BINARY_EXTS:
             raise ToolError(f"'{path}' is a binary file")
-        text = target.read_text(errors="replace")
+        text = target.read_text(encoding="utf-8", errors="replace")
         lines = text.splitlines()
         rel = self._rel(target)
         self.files_read[rel] = len(lines)
@@ -126,7 +126,7 @@ class RepoTools:
             if path_glob and not Path(rel).match(path_glob):
                 continue
             try:
-                for n, line in enumerate(abspath.read_text(errors="ignore").splitlines(), 1):
+                for n, line in enumerate(abspath.read_text(encoding="utf-8", errors="ignore").splitlines(), 1):
                     if regex.search(line):
                         hits.append(f"{rel}:{n}: {redact(line.strip())[:200]}")
                         if len(hits) >= MAX_SEARCH_HITS:

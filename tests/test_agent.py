@@ -266,3 +266,38 @@ def test_system_paths_are_not_counted_as_citations(sample_repo):
     report = check_citations("It falls back to `/etc/ssl/cert.pem`. Entry: `/app.py:4`.", sample_repo, {"app.py": 8})
     assert report.problems == []
     assert report.valid == ["/app.py:4"]
+
+
+def test_find_language_accepts_codes_english_and_native_names():
+    from marg.prompts import find_language
+
+    assert find_language("hi") == find_language("Hindi") == find_language(" HINDI ") == find_language("हिन्दी") == "hi"
+    assert find_language("Tamil") == find_language("தமிழ்") == "ta"
+    with pytest.raises(ValueError, match="Choose from"):
+        find_language("klingon")
+
+
+def test_guide_in_hindi_keeps_code_and_citations_untranslated(sample_repo):
+    transport = ScriptedTransport([responses_text("# ऑनबोर्डिंग गाइड (Onboarding guide): demo\nएंट्री पॉइंट `app.py:4-5` में है।\n")])
+    result = write_guide(Client(api_key="k", transport=transport), sample_repo, lang="hi")
+    _, body = transport.requests[0]
+    system = body["input"][0]["content"]
+    assert "Hindi (हिन्दी)" in system
+    assert "Never translate or transliterate code" in system
+    assert "(Run it locally)" in system
+    assert result.markdown.startswith("# ऑनबोर्डिंग गाइड")
+    assert result.citations.unread == ["app.py:4-5"]  # parsed out of Devanagari prose; never read, so not verified
+
+
+def test_english_and_ask_prompts(sample_repo):
+    from marg import prompts
+
+    assert prompts.language_rules("en") == ""
+    rules = prompts.language_rules("ta", guide=False)
+    assert "your answer in Tamil (தமிழ்)" in rules and "heading" not in rules
+
+
+def test_citations_inside_indian_language_prose_are_checked(sample_repo):
+    report = check_citations("राउट `routes.py:3` में रजिस्टर होते हैं, और ऐप `app.py:4-5` में बनता है।", sample_repo,
+                             {"app.py": 8, "routes.py": 6}, {"app.py": [(1, 8)], "routes.py": [(1, 6)]})
+    assert report.valid == ["routes.py:3", "app.py:4-5"]

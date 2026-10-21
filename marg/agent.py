@@ -142,13 +142,15 @@ def run_agent(
     return AgentResult(markdown, steps, tool_calls, tools.files_read, report, usage)
 
 
-def write_guide(client: Client, root: str | Path, max_steps: int = 30, log: Logger = lambda _m: None) -> AgentResult:
+def write_guide(client: Client, root: str | Path, max_steps: int = 30, log: Logger = lambda _m: None,
+                lang: str = "en") -> AgentResult:
     summary = render_summary(build_repo_map(root))
-    return run_agent(client, root, prompts.GUIDE_SYSTEM, prompts.guide_user_prompt(summary), max_steps, log,
-                     title_first=True)
+    system = prompts.GUIDE_SYSTEM + prompts.language_rules(lang)
+    return run_agent(client, root, system, prompts.guide_user_prompt(summary), max_steps, log, title_first=True)
 
 
-def ask(client: Client, root: str | Path, question: str, max_steps: int = 15, log: Logger = lambda _m: None) -> AgentResult:
+def ask(client: Client, root: str | Path, question: str, max_steps: int = 15, log: Logger = lambda _m: None,
+        lang: str = "en") -> AgentResult:
     summary = render_summary(build_repo_map(root))
-    return run_agent(client, root, prompts.ASK_SYSTEM, prompts.ask_user_prompt(summary, question),
-                     max_steps, log, footer=False)
+    system = prompts.ASK_SYSTEM + prompts.language_rules(lang, guide=False)
+    return run_agent(client, root, system, prompts.ask_user_prompt(summary, question), max_steps, log, footer=False)

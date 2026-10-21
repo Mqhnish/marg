@@ -138,3 +138,48 @@ def test_deadline_wrapper_passes_results_and_errors_through(monkeypatch):
     with pytest.raises(LLMError) as info:
         http_transport("http://x/v1/responses", {}, {})
     assert info.value.status == 401
+
+
+def test_guide_in_tamil_end_to_end(sample_repo, monkeypatch, tmp_path, capsys):
+    script = [(200, {"status": "completed", "output": [{"type": "message", "role": "assistant", "content": [
+        {"type": "output_text", "text": "# ஆன்போர்டிங் வழிகாட்டி (Onboarding guide): demo\n"}]}]})]
+    seen = []
+    server = make_server(script, seen)
+    monkeypatch.setenv("BHARATCODE_API_KEY", "bc_live_testkey123")
+    out = tmp_path / "GUIDE.ta.md"
+    try:
+        code = main(["guide", str(sample_repo), "-o", str(out), "--lang", "Tamil",
+                     "--base-url", f"http://127.0.0.1:{server.server_port}/api/model/v1"])
+    finally:
+        server.shutdown()
+    assert code == 0
+    assert "Tamil (தமிழ்)" in seen[0][2]["input"][0]["content"]
+    assert "writing in Tamil" in capsys.readouterr().err
+    assert out.read_text(encoding="utf-8").startswith("# ஆன்போர்டிங் வழிகாட்டி")
+
+
+def test_guide_is_written_as_utf8_whatever_the_locale(sample_repo, monkeypatch, tmp_path):
+    # Windows defaults to a legacy code page, which can't encode Devanagari or Tamil.
+    import pathlib
+
+    real_write_text = pathlib.Path.write_text
+    encodings = []
+
+    def recording_write_text(self, data, encoding=None, *args, **kwargs):
+        encodings.append(encoding)
+        return real_write_text(self, data, encoding, *args, **kwargs)
+
+    monkeypatch.setattr(pathlib.Path, "write_text", recording_write_text)
+    script = [(200, {"status": "completed", "output": [{"type": "message", "role": "assistant", "content": [
+        {"type": "output_text", "text": "# गाइड (Onboarding guide): demo\n"}]}]})]
+    server = make_server(script, [])
+    monkeypatch.setenv("BHARATCODE_API_KEY", "bc_live_testkey123")
+    out = tmp_path / "GUIDE.hi.md"
+    try:
+        code = main(["guide", str(sample_repo), "-o", str(out), "--lang", "hi", "-q",
+                     "--base-url", f"http://127.0.0.1:{server.server_port}/api/model/v1"])
+    finally:
+        server.shutdown()
+    assert code == 0
+    assert encodings == ["utf-8"]
+    assert out.read_bytes().decode("utf-8").startswith("# गाइड")

@@ -7,12 +7,20 @@ import sys
 from pathlib import Path
 
 from marg import __version__
+from marg.prompts import LANGUAGES, find_language
 from marg.llm import DEFAULT_MODEL, Client, LLMError
 from marg.repomap import build_repo_map, render_summary
 
 
 def _client(args) -> Client:
     return Client(model=args.model, api_style=args.api, base_url=args.base_url)
+
+
+def _language(name: str) -> str:
+    try:
+        return find_language(name)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
 
 
 def _log(quiet: bool):
@@ -29,11 +37,12 @@ def cmd_guide(args) -> int:
 
     log = _log(args.quiet)
     root = Path(args.path).resolve()
-    log(f"Marg is exploring {root.name} with {args.model or DEFAULT_MODEL} ...")
-    result = write_guide(_client(args), root, max_steps=args.max_steps, log=log)
+    in_lang = "" if args.lang == "en" else f", writing in {LANGUAGES[args.lang][0]}"
+    log(f"Marg is exploring {root.name} with {args.model or DEFAULT_MODEL}{in_lang} ...")
+    result = write_guide(_client(args), root, max_steps=args.max_steps, log=log, lang=args.lang)
     out = Path(args.output) if args.output else root / "ONBOARDING.md"
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(result.markdown)
+    out.write_text(result.markdown, encoding="utf-8")
     r = result.citations
     log(
         f"Wrote {out} after {result.steps} steps and {result.tool_calls} tool calls. "
@@ -48,7 +57,8 @@ def cmd_guide(args) -> int:
 def cmd_ask(args) -> int:
     from marg.agent import ask
 
-    result = ask(_client(args), Path(args.path).resolve(), args.question, max_steps=args.max_steps, log=_log(args.quiet))
+    result = ask(_client(args), Path(args.path).resolve(), args.question, max_steps=args.max_steps,
+                 log=_log(args.quiet), lang=args.lang)
     print(result.markdown)
     if result.citations.problems:
         print("Unverified citations: " + ", ".join(result.citations.problems), file=sys.stderr)
@@ -68,6 +78,9 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--api", choices=["responses", "chat"], default="responses",
                        help="which BharatCode endpoint to use (default: responses)")
         p.add_argument("--base-url", default=None, help="override the API base URL")
+        p.add_argument("--lang", type=_language, default="en", metavar="LANG",
+                       help="write in English or an Indian language: " + ", ".join(LANGUAGES)
+                       + " (a code or the language's name, default en)")
         p.add_argument("-q", "--quiet", action="store_true", help="do not print progress")
 
     p_map = sub.add_parser("map", help="print the local repo map (no API key needed)")

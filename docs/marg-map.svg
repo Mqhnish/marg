@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="784" viewBox="0 0 640 784">
+<rect width="640" height="784" rx="10" fill="#1e1f24"/>
+<circle cx="20" cy="18" r="6" fill="#ff5f57"/><circle cx="40" cy="18" r="6" fill="#febc2e"/><circle cx="60" cy="18" r="6" fill="#28c840"/>
+<g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14">
+<text x="20" y="58" fill="#7ee787" xml:space="preserve">$ marg map .</text>
+<text x="20" y="78" xml:space="preserve"><tspan fill="#79c0ff">Repository:</tspan><tspan fill="#e6e6e6"> marg</tspan></text>
+<text x="20" y="98" xml:space="preserve"><tspan fill="#79c0ff">Files:</tspan><tspan fill="#e6e6e6"> 21 text files, 1513 lines</tspan></text>
+<text x="20" y="118" xml:space="preserve"><tspan fill="#79c0ff">Languages:</tspan><tspan fill="#e6e6e6"> Python (1321 lines)</tspan></text>
+<text x="20" y="138" xml:space="preserve"><tspan fill="#79c0ff">Manifests:</tspan><tspan fill="#e6e6e6"> pyproject.toml</tspan></text>
+<text x="20" y="158" xml:space="preserve"><tspan fill="#79c0ff">Likely entry points:</tspan><tspan fill="#e6e6e6"> marg/__main__.py, marg/cli.py</tspan></text>
+<text x="20" y="178" fill="#e6e6e6" xml:space="preserve"></text>
+<text x="20" y="198" fill="#e6e6e6" xml:space="preserve">File tree:</text>
+<text x="20" y="218" xml:space="preserve"><tspan fill="#e6e6e6">.env.example  </tspan><tspan fill="#8b949e">[5 lines]</tspan></text>
+<text x="20" y="238" xml:space="preserve"><tspan fill="#e6e6e6">.gitignore  </tspan><tspan fill="#8b949e">[9 lines]</tspan></text>
+<text x="20" y="258" xml:space="preserve"><tspan fill="#e6e6e6">BharatCode.txt  </tspan><tspan fill="#8b949e">[20 lines]</tspan></text>
+<text x="20" y="278" xml:space="preserve"><tspan fill="#e6e6e6">LICENSE  </tspan><tspan fill="#8b949e">[21 lines]</tspan></text>
+<text x="20" y="298" xml:space="preserve"><tspan fill="#e6e6e6">README.md  </tspan><tspan fill="#8b949e">[86 lines]</tspan></text>
+<text x="20" y="318" xml:space="preserve"><tspan fill="#e6e6e6">pyproject.toml  </tspan><tspan fill="#8b949e">[32 lines]</tspan></text>
+<text x="20" y="338" fill="#d2a8ff" xml:space="preserve">  workflows/  (.github/workflows)</text>
+<text x="20" y="358" xml:space="preserve"><tspan fill="#e6e6e6">    ci.yml  </tspan><tspan fill="#8b949e">[19 lines]</tspan></text>
+<text x="20" y="378" fill="#d2a8ff" xml:space="preserve">marg/  (marg)</text>
+<text x="20" y="398" xml:space="preserve"><tspan fill="#e6e6e6">  __init__.py  </tspan><tspan fill="#8b949e">[3 lines]</tspan></text>
+<text x="20" y="418" xml:space="preserve"><tspan fill="#e6e6e6">  __main__.py  </tspan><tspan fill="#8b949e">[3 lines]</tspan></text>
+<text x="20" y="438" xml:space="preserve"><tspan fill="#e6e6e6">  agent.py  </tspan><tspan fill="#8b949e">[109 lines]</tspan></text>
+<text x="20" y="458" xml:space="preserve"><tspan fill="#e6e6e6">  cli.py  </tspan><tspan fill="#8b949e">[101 lines]</tspan></text>
+<text x="20" y="478" xml:space="preserve"><tspan fill="#e6e6e6">  llm.py  </tspan><tspan fill="#8b949e">[183 lines]</tspan></text>
+<text x="20" y="498" xml:space="preserve"><tspan fill="#e6e6e6">  prompts.py  </tspan><tspan fill="#8b949e">[68 lines]</tspan></text>
+<text x="20" y="518" xml:space="preserve"><tspan fill="#e6e6e6">  repomap.py  </tspan><tspan fill="#8b949e">[228 lines]</tspan></text>
+<text x="20" y="538" xml:space="preserve"><tspan fill="#e6e6e6">  tools.py  </tspan><tspan fill="#8b949e">[175 lines]</tspan></text>
+<text x="20" y="558" xml:space="preserve"><tspan fill="#e6e6e6">  verify.py  </tspan><tspan fill="#8b949e">[84 lines]</tspan></text>
+<text x="20" y="578" fill="#d2a8ff" xml:space="preserve">tests/  (tests)</text>
+<text x="20" y="598" xml:space="preserve"><tspan fill="#e6e6e6">  conftest.py  </tspan><tspan fill="#8b949e">[37 lines]</tspan></text>
+<text x="20" y="618" xml:space="preserve"><tspan fill="#e6e6e6">  test_agent.py  </tspan><tspan fill="#8b949e">[177 lines]</tspan></text>
+<text x="20" y="638" xml:space="preserve"><tspan fill="#e6e6e6">  test_cli.py  </tspan><tspan fill="#8b949e">[18 lines]</tspan></text>
+<text x="20" y="658" xml:space="preserve"><tspan fill="#e6e6e6">  test_http_e2e.py  </tspan><tspan fill="#8b949e">[69 lines]</tspan></text>
+<text x="20" y="678" xml:space="preserve"><tspan fill="#e6e6e6">  test_repomap_and_tools.py  </tspan><tspan fill="#8b949e">[66 lines]</tspan></text>
+<text x="20" y="698" fill="#e6e6e6" xml:space="preserve"></text>
+<text x="20" y="718" fill="#e6e6e6" xml:space="preserve">README (first 3000 chars):</text>
+<text x="20" y="738" fill="#e6e6e6" xml:space="preserve"># Marg</text>
+<text x="20" y="758" fill="#e6e6e6" xml:space="preserve">...</text>
+</g></svg>

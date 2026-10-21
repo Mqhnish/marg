@@ -32,6 +32,10 @@ Useful flags: `--max-steps N` (tool budget, default 30 for guides), `--model ID`
 marg ask "where are API routes registered and how is auth checked?" ~/code/my-service
 ```
 
+Here is `marg map` run on this repo. It works offline and is the head start the agent gets before it reads any code:
+
+![Output of marg map on the Marg repo](docs/marg-map.svg)
+
 ## How it works
 
 ```mermaid

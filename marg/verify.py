@@ -10,7 +10,15 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-CITATION = re.compile(r"`([A-Za-z0-9_./\-]+\.[A-Za-z0-9_]+|[A-Za-z0-9_./\-]*(?:Makefile|Dockerfile|Procfile))(?::(\d+)(?:-(\d+))?)?`")
+PATH = r"[A-Za-z0-9_./\-]+\.[A-Za-z0-9_]+|[A-Za-z0-9_./\-]*(?:Makefile|Dockerfile|Procfile)"
+RANGE = r"\d+(?:-\d+)?"
+LINES = rf"{RANGE}(?:\s*,\s*{RANGE})*"
+# `path` or `path:LINES` in backticks, or a bare path:LINES in prose. Models drift between the two,
+# and a real Tamil guide wrote most of its citations as (README.md:5), which used to go unchecked.
+CITATION = re.compile(
+    rf"`(?P<tpath>{PATH})(?::(?P<tlines>{LINES}))?`"
+    rf"|(?<![\w./`-])(?P<path>{PATH}):(?P<lines>{LINES})(?![\w-])"
+)
 
 
 @dataclass
@@ -39,26 +47,28 @@ def check_citations(markdown: str, root: str | Path, files_read: dict[str, int],
     report = CitationReport()
     seen = set()
     for match in CITATION.finditer(markdown):
-        rel, start, end = match.group(1), match.group(2), match.group(3)
-        if start is None and "/" not in rel and not (root / rel).is_file():
-            # bare names like `config.yaml` that are not real files are prose, not citations
+        bare = match.group("path") is not None
+        rel = match.group("path") or match.group("tpath")
+        lines = match.group("lines") or match.group("tlines")
+        exists = (root / rel.lstrip("/")).is_file()
+        if not exists and (rel.startswith("/") or (bare and "/" not in rel)):
+            # `/etc/ssl/cert.pem` is a path on the reader's machine, and a bare 127.0.0.1:8080 is prose
             continue
-        if rel.startswith("/"):
-            if not (root / rel.lstrip("/")).is_file():
-                continue  # a path on the reader's machine, like `/etc/ssl/cert.pem`, not a repo citation
-            rel = rel.lstrip("/")
+        if lines is None and "/" not in rel and not exists:
+            continue  # bare names like `config.yaml` that are not real files are prose, not citations
+        rel = rel.lstrip("/")
+        while rel.startswith("./"):
+            rel = rel[2:]
         token = match.group(0).strip("`")
         if token in seen:
             continue
         seen.add(token)
-        while rel.startswith("./"):
-            rel = rel[2:]
         path = (root / rel).resolve()
         if root not in path.parents or not path.is_file():
             report.missing.append(token)
             continue
-        lo = hi = None
-        if start is not None:
+        cited = [(int(a), int(b or a)) for a, b in re.findall(r"(\d+)(?:-(\d+))?", lines or "")]
+        if cited:
             try:
                 total = files_read.get(rel)
                 if total is None:
@@ -66,12 +76,11 @@ def check_citations(markdown: str, root: str | Path, files_read: dict[str, int],
             except OSError:
                 report.missing.append(token)
                 continue
-            lo, hi = int(start), int(end or start)
-            if lo < 1 or hi < lo or hi > total:
+            if any(lo < 1 or hi < lo or hi > total for lo, hi in cited):
                 report.bad_lines.append(token)
                 continue
-        seen_lines = lo is None or ranges_read is None or _covered(ranges_read.get(rel, []), lo, hi)
-        if rel in files_read and seen_lines:
+        shown = ranges_read is None or all(_covered(ranges_read.get(rel, []), lo, hi) for lo, hi in cited)
+        if rel in files_read and shown:
             report.valid.append(token)
         else:
             report.unread.append(token)

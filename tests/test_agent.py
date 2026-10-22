@@ -382,3 +382,13 @@ def test_chat_style_sends_reasoning_effort(sample_repo):
                                                                      reasoning="none")
     _, body = transport.requests[0]
     assert body["reasoning_effort"] == "none" and "stream" not in body
+
+
+def test_bare_and_multi_range_citations_are_checked(sample_repo):
+    md = ("Entry in (app.py:4-5) and `app.py:1,4-5`; see routes.py:3, 99 and lib/ghost.py:2. "
+          "Not citations: 127.0.0.1:8080, version 1.2:3, `/etc/hosts:1` and http://example.com/a.js:12.")
+    report = check_citations(md, sample_repo, {"app.py": 8, "routes.py": 6}, {"app.py": [(1, 8)], "routes.py": [(1, 6)]})
+    assert report.valid == ["app.py:4-5", "app.py:1,4-5"]
+    assert report.bad_lines == ["routes.py:3, 99"]  # line 99 doesn't exist
+    assert report.missing == ["lib/ghost.py:2"]
+    assert report.unread == []
